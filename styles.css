@@ -190,14 +190,21 @@ p + p { margin-top: 1rem; }
 
 .nav__burger {
   display: none;
-  flex-direction: column;
+  /* La zone tactile fait 44×44 : en dessous, le doigt rate la cible une fois
+     sur trois. Les deux barres restent visuellement à leur taille. */
+  align-items: center;
+  justify-content: center;
+  align-content: center;
+  flex-wrap: wrap;
   gap: 6px;
+  width: 44px;
+  height: 44px;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px;
   z-index: 110;
 }
+.nav__burger span { flex: 0 0 100%; }
 .nav__burger span {
   display: block;
   width: 26px;
@@ -544,7 +551,7 @@ p + p { margin-top: 1rem; }
 .price-card__badge {
   position: absolute;
   top: 1.4rem; right: 1.4rem;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.2em;
@@ -683,6 +690,7 @@ p + p { margin-top: 1rem; }
   border: 1.5px solid transparent;
   border-radius: 999px;
   padding: 0.6rem 1.2rem;
+  min-height: 44px;           /* cible tactile confortable */
   cursor: pointer;
   transition: border-color 0.3s, background 0.3s;
   text-transform: capitalize;
@@ -922,13 +930,19 @@ p + p { margin-top: 1rem; }
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 1.8rem;
+  gap: 0 1.8rem;
   margin-bottom: 1.6rem;
 }
 .footer__links a {
   color: rgba(246, 241, 231, 0.8);
   text-decoration: none;
   font-size: 0.9rem;
+  /* Liens de navigation, pas de simples liens dans une phrase : ils méritent
+     une zone tactile, sans quoi on vise entre deux au pouce. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 0.25rem;
 }
 .footer__links a:hover { color: var(--cream); }
 
@@ -1000,8 +1014,16 @@ p + p { margin-top: 1rem; }
     z-index: 105;
   }
   .nav__links.is-open { transform: translateY(0); }
-  .nav__links a:not(.btn) { font-size: 1.3rem; }
+  .nav__links a:not(.btn) {
+    font-size: 1.3rem;
+    padding: 0.4rem 1rem;   /* 44px de haut dans le menu plein écran */
+  }
   .nav__burger { display: flex; }
+
+  /* Sur écran étroit, huit pastilles empilées une par ligne font défiler
+     interminablement : deux colonnes tiennent dans la même hauteur. */
+  .date-pills { display: grid; grid-template-columns: 1fr 1fr; }
+  .date-pill { text-align: center; padding-inline: 0.6rem; }
 
   .pricing { grid-template-columns: 1fr; }
   .type-choice { grid-template-columns: 1fr; }
