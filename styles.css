@@ -429,86 +429,46 @@ p + p { margin-top: 1rem; }
   padding-left: 1rem;
 }
 
-/* Précautions — situations où la séance se reporte */
+/* Mise en garde — version compacte, dans le module de réservation.
+   Présente au moment de confirmer, sans dominer la page. */
 .precautions {
-  margin-top: clamp(2.5rem, 5vw, 4rem);
+  margin-top: 1.2rem;
+  padding: 0.9rem 1.1rem;
   background: var(--white);
-  border: 1.5px solid var(--cream-3);
-  border-radius: var(--radius);
-  padding: clamp(1.5rem, 4vw, 2.5rem);
-  box-shadow: var(--shadow-soft);
+  border-left: 3px solid var(--terra-soft);
+  border-radius: 12px;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: rgba(43, 51, 39, 0.7);
 }
-
-.precautions__head {
-  display: flex;
-  align-items: center;
-  gap: 1.1rem;
-  margin-bottom: 1.4rem;
-}
-.precautions__icon {
-  flex: none;
-  width: 42px;
-  height: 42px;
-  color: var(--terra);
-}
-.precautions__head h3 {
-  font-family: var(--font-display);
-  font-size: clamp(1.25rem, 2.6vw, 1.6rem);
+.precautions__title {
   font-weight: 500;
   color: var(--forest-deep);
-  margin-top: 0.2rem;
+  margin-bottom: 0.5rem;
 }
-
-.precautions__lead {
-  color: rgba(43, 51, 39, 0.75);
-  max-width: 44rem;
-}
-
-.precautions__list {
+.precautions ul {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 1.2rem;
-  margin: 1.6rem 0 0;
+  gap: 0.3rem;
 }
-.precautions__list li {
-  background: var(--cream);
-  border-radius: 14px;
-  border-left: 3px solid var(--terra);
-  padding: 1.1rem 1.25rem;
+.precautions li {
+  position: relative;
+  padding-left: 0.85rem;
 }
-.precautions__list strong {
-  display: block;
-  font-weight: 500;
-  color: var(--forest-deep);
-  margin-bottom: 0.35rem;
+.precautions li::before {
+  content: "·";
+  position: absolute;
+  left: 0.15rem;
+  color: var(--terra);
+  font-weight: 700;
 }
-.precautions__list span {
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: rgba(43, 51, 39, 0.72);
-}
-
+.precautions strong { font-weight: 500; color: var(--ink); }
 .precautions__note {
-  margin-top: 1.6rem;
-  font-size: 0.87rem;
-  color: rgba(43, 51, 39, 0.6);
-  border-left: 2px solid var(--sage-soft);
-  padding-left: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: rgba(43, 51, 39, 0.55);
 }
 .precautions__note a { color: var(--terra); }
-
-/* Rappel compact au-dessus du module de réservation */
-.section__sub--warn {
-  font-size: 0.9rem;
-  color: rgba(43, 51, 39, 0.62);
-  max-width: 38rem;
-  margin-top: 0.6rem;
-}
-.section__sub--warn a {
-  color: var(--terra);
-  text-underline-offset: 3px;
-}
 
 /* ---------- 02 · La praticienne ---------- */
 .patricia__grid {

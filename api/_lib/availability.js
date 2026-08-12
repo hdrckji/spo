@@ -22,9 +22,13 @@ import {
 import { sql } from "./db.js";
 
 /**
+ * @param {object}  [options]
+ * @param {number}  [options.minNoticeHours] délai de prévenance. Le public est
+ *   soumis à MIN_NOTICE_HOURS ; l'administration passe 0, Patricia devant
+ *   pouvoir déplacer un rendez-vous vers demain matin si nécessaire.
  * @returns {Promise<{types: object, slots: Array, days: Array}>}
  */
-export async function getAvailability() {
+export async function getAvailability({ minNoticeHours = MIN_NOTICE_HOURS } = {}) {
   const dates = nextFridays();
   const first = dates[0];
   const last = dates[dates.length - 1];
@@ -54,7 +58,7 @@ export async function getAvailability() {
 
   const blockedByDay = new Map(blocked.map((row) => [row.day, row.reason]));
 
-  const cutoff = Date.now() + MIN_NOTICE_HOURS * 3_600_000;
+  const cutoff = Date.now() + minNoticeHours * 3_600_000;
 
   const days = dates.map((date) => {
     const taken = takenByDay.get(date) ?? new Set();
@@ -83,16 +87,21 @@ export async function getAvailability() {
   return {
     types: Object.values(TYPES),
     slots: SLOTS,
-    minNoticeHours: MIN_NOTICE_HOURS,
+    minNoticeHours,
     days,
   };
 }
 
 /**
- * Revalidation d'une demande avant enregistrement.
+ * Revalidation d'une demande avant enregistrement ou déplacement.
+ *
+ * Les mêmes règles s'appliquent au public et à l'administration — type de
+ * séance compatible avec le créneau, date proposée, journée non bloquée —
+ * à l'exception du délai de prévenance, que l'administration ignore.
+ *
  * @returns {{ok: true} | {ok: false, status: number, error: string}}
  */
-export async function validateRequest({ date, slot, type }) {
+export async function validateRequest({ date, slot, type, minNoticeHours = MIN_NOTICE_HOURS }) {
   if (!TYPES[type]) {
     return { ok: false, status: 400, error: "Type de séance inconnu." };
   }
@@ -112,11 +121,11 @@ export async function validateRequest({ date, slot, type }) {
   }
 
   const { start } = slotInstants(date, slot);
-  if (start.getTime() < Date.now() + MIN_NOTICE_HOURS * 3_600_000) {
+  if (start.getTime() < Date.now() + minNoticeHours * 3_600_000) {
     return {
       ok: false,
       status: 409,
-      error: `Les réservations se font au moins ${MIN_NOTICE_HOURS} heures à l'avance.`,
+      error: `Les réservations se font au moins ${minNoticeHours} heures à l'avance.`,
     };
   }
 

@@ -127,16 +127,23 @@ function clientHTML(b, cancelURL) {
 </body></html>`;
 }
 
+function cancelURLFor(booking) {
+  return `${siteURL()}/api/cancel?token=${encodeURIComponent(booking.cancel_token)}`;
+}
+
 /**
- * Envoie les deux e-mails. Ne lève jamais : renvoie l'état de chaque envoi
- * pour que l'appelant décide quoi montrer à l'utilisateur.
+ * Pièce jointe calendrier d'un rendez-vous.
+ *
+ * L'UID ne change jamais et SEQUENCE suit `revision` : après un déplacement,
+ * les applications de calendrier mettent donc à jour l'événement existant au
+ * lieu d'en ajouter un second à côté de l'ancien.
  */
-export async function sendBookingEmails(booking) {
+function bookingICS(booking) {
   const type = TYPES[booking.session_type];
-  const cancelURL = `${siteURL()}/api/cancel?token=${encodeURIComponent(booking.cancel_token)}`;
+  const cancelURL = cancelURLFor(booking);
   const { start, end } = slotInstants(booking.booking_date, booking.slot);
 
-  const ics = buildICS({
+  return buildICS({
     calName: "Instants Réflexo",
     method: "PUBLISH",
     events: [
@@ -144,12 +151,29 @@ export async function sendBookingEmails(booking) {
         uid: `${booking.id}@instants-reflexo.be`,
         start,
         end,
+        sequence: booking.revision ?? 0,
         summary: `Réflexologie plantaire — séance ${type.label.toLowerCase()}`,
         description: `Séance de réflexologie plantaire avec Patricia Valck.\nPaiement sur place (${type.price} €).\nAnnulation : ${cancelURL}`,
       },
     ],
   });
+}
 
+function icsAttachment(booking) {
+  return {
+    filename: "rendez-vous.ics",
+    content: Buffer.from(bookingICS(booking), "utf8").toString("base64"),
+    content_type: "text/calendar; method=PUBLISH; charset=utf-8",
+  };
+}
+
+/**
+ * Envoie les deux e-mails. Ne lève jamais : renvoie l'état de chaque envoi
+ * pour que l'appelant décide quoi montrer à l'utilisateur.
+ */
+export async function sendBookingEmails(booking) {
+  const type = TYPES[booking.session_type];
+  const cancelURL = cancelURLFor(booking);
   const dateLabel = longLabel(booking.booking_date);
 
   const toPractitioner = send({
@@ -182,17 +206,78 @@ export async function sendBookingEmails(booking) {
       ``,
       `— Instants Réflexo, Patricia Valck`,
     ].join("\n"),
-    attachments: [
-      {
-        filename: "rendez-vous.ics",
-        content: Buffer.from(ics, "utf8").toString("base64"),
-        content_type: "text/calendar; method=PUBLISH; charset=utf-8",
-      },
-    ],
+    attachments: [icsAttachment(booking)],
   });
 
   const [practitioner, client] = await Promise.all([toPractitioner, toClient]);
   return { practitioner, client };
+}
+
+/**
+ * Informe le client que Patricia a déplacé son rendez-vous.
+ *
+ * `booking` porte déjà la nouvelle date et la nouvelle révision ; `previous`
+ * ne sert qu'à rappeler d'où l'on vient dans le message.
+ */
+export async function sendMoveEmail(booking, previous) {
+  const type = TYPES[booking.session_type];
+  const cancelURL = cancelURLFor(booking);
+  const newLabel = longLabel(booking.booking_date);
+  const oldLabel = `${longLabel(previous.booking_date)} (${previous.slot_label})`;
+
+  return send({
+    from: sender(),
+    to: [booking.email],
+    reply_to: recipient(),
+    subject: `Votre rendez-vous est déplacé au ${newLabel} — Instants Réflexo`,
+    html: `<!doctype html>
+<html lang="fr"><body style="margin:0;padding:0;background:#f6f1e7;font-family:'Helvetica Neue',Arial,sans-serif;color:#2b3327;">
+  <div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+    <p style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#8a9b82;margin:0 0 24px;">Instants Réflexo</p>
+    <h1 style="font-size:24px;font-weight:500;margin:0 0 16px;color:#2e4034;">Votre rendez-vous a été déplacé</h1>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
+      Bonjour ${escapeHTML(booking.name)},<br>
+      Patricia a dû déplacer votre séance. La pièce jointe met à jour le rendez-vous
+      dans votre agenda — l'ancienne date en disparaît d'elle-même.
+    </p>
+    <table style="width:100%;border-collapse:collapse;background:#fdfbf6;border-radius:12px;">
+      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Ancienne date</td>
+          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;text-decoration:line-through;color:#8a9b82;">${escapeHTML(oldLabel)}</td></tr>
+      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Nouvelle date</td>
+          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;font-weight:600;color:#2e4034;">${escapeHTML(newLabel)}</td></tr>
+      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Créneau</td>
+          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;font-weight:600;">${escapeHTML(booking.slot_label)}</td></tr>
+      <tr><td style="padding:14px 18px;font-size:14px;color:#8a9b82;">Séance</td>
+          <td style="padding:14px 18px;font-size:14px;text-align:right;">${escapeHTML(type.label)} — ${type.price} €</td></tr>
+    </table>
+    <p style="font-size:14px;line-height:1.6;margin:24px 0 0;color:#5a6553;">
+      Cette nouvelle date ne vous convient pas&nbsp;? Répondez simplement à cet e-mail,
+      ou <a href="${escapeHTML(cancelURL)}" style="color:#c17a54;">annulez le rendez-vous</a>.
+    </p>
+    <p style="font-size:13px;line-height:1.6;margin:28px 0 0;color:#8a9b82;border-top:1px solid #e7dcc6;padding-top:20px;">
+      Instants Réflexo — Patricia Valck · ${escapeHTML(CONTACT_EMAIL)}
+    </p>
+  </div>
+</body></html>`,
+    text: [
+      `Bonjour ${booking.name},`,
+      ``,
+      `Patricia a dû déplacer votre séance de réflexologie plantaire.`,
+      ``,
+      `Ancienne date : ${oldLabel}`,
+      `Nouvelle date : ${newLabel} (${booking.slot_label})`,
+      `Séance        : ${type.label} (${type.price} €)`,
+      `Lieu          : ${LOCATION}`,
+      ``,
+      `La pièce jointe met à jour le rendez-vous dans votre agenda.`,
+      ``,
+      `Cette date ne vous convient pas ? Répondez à cet e-mail,`,
+      `ou annulez ici : ${cancelURL}`,
+      ``,
+      `— Instants Réflexo, Patricia Valck`,
+    ].join("\n"),
+    attachments: [icsAttachment(booking)],
+  });
 }
 
 /** Prévenir Patricia qu'un créneau vient de se libérer. */

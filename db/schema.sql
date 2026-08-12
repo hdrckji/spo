@@ -22,6 +22,10 @@ create table if not exists bookings (
   status        text        not null default 'confirmed',
   cancel_token  text        not null,
   ip_hash       text,
+  -- Incrémenté à chaque déplacement. Sert de SEQUENCE iCalendar : c'est ce
+  -- qui permet aux applications de calendrier de *mettre à jour* le
+  -- rendez-vous existant au lieu d'en créer un second.
+  revision      integer     not null default 0,
   created_at    timestamptz not null default now(),
   cancelled_at  timestamptz,
 
@@ -47,6 +51,10 @@ create index if not exists bookings_date_idx
 -- Recherche par lien d'annulation.
 create index if not exists bookings_cancel_token_idx
   on bookings (cancel_token);
+
+-- Ajout de colonne pour les bases créées avant cette version : `create table
+-- if not exists` ne touche pas une table déjà présente, cet ALTER si.
+alter table bookings add column if not exists revision integer not null default 0;
 
 -- ------------------------------------------------------------
 --  Dates bloquées (congés, absences)

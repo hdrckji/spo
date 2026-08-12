@@ -224,50 +224,6 @@
         </div>
       </div>
 
-      <!-- Précautions : situations où la séance se reporte -->
-      <aside class="precautions reveal" id="precautions" aria-labelledby="precautions-title">
-        <div class="precautions__head">
-          <svg class="precautions__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M24 6 L 44 40 L 4 40 Z"/>
-            <path d="M24 19 L 24 29"/>
-            <circle cx="24" cy="34.5" r="1.4" fill="currentColor" stroke="none"/>
-          </svg>
-          <div>
-            <p class="eyebrow">À savoir avant de réserver</p>
-            <h3 id="precautions-title">Quand reporter votre séance</h3>
-          </div>
-        </div>
-
-        <p class="precautions__lead">
-          La réflexologie plantaire est douce, mais elle stimule la circulation et
-          l'élimination. Dans trois situations, mieux vaut attendre&nbsp;:
-        </p>
-
-        <ul class="precautions__list">
-          <li>
-            <strong>Prise de sang</strong>
-            <span>Pas de séance dans les 15&nbsp;jours qui précèdent un prélèvement&nbsp;: la
-            stimulation peut influencer les résultats de l'analyse.</span>
-          </li>
-          <li>
-            <strong>Grossesse</strong>
-            <span>Pas de séance pendant les trois premiers mois. Au-delà, parlez-en à
-            Patricia&nbsp;: la séance est alors adaptée.</span>
-          </li>
-          <li>
-            <strong>Opération</strong>
-            <span>Pas de séance avant une intervention chirurgicale, ni dans le mois qui
-            la suit. Laissez au corps le temps de récupérer.</span>
-          </li>
-        </ul>
-
-        <p class="precautions__note">
-          Un doute, un traitement en cours, une question&nbsp;? Écrivez à Patricia avant de
-          réserver&nbsp;: <a href="mailto:contact@instants-reflexo.be">contact@instants-reflexo.be</a>.
-          En cas de problème de santé, l'avis de votre médecin prime toujours.
-        </p>
-      </aside>
     </section>
 
     <!-- ===== 02 · La praticienne ===== -->
@@ -368,10 +324,6 @@
         <p class="eyebrow">Réservation</p>
         <h2>Réservez votre <em>instant</em></h2>
         <p class="section__sub">Les séances ont lieu le vendredi, au Centre Petite Fontaine à Péruwelz.</p>
-        <p class="section__sub section__sub--warn">
-          Prise de sang, grossesse de moins de trois mois, opération récente ou à venir&nbsp;?
-          <a href="#precautions">Consultez les précautions</a> avant de réserver.
-        </p>
       </div>
 
       <noscript>
@@ -446,6 +398,21 @@
             <p class="form-error" id="form-error" role="alert" hidden></p>
             <button type="submit" class="btn btn--primary btn--full" id="submit-btn">Confirmer ma réservation</button>
             <p class="form-note">Le créneau est réservé immédiatement et vous recevez la confirmation par e-mail, avec un lien d'annulation. Paiement sur place.</p>
+
+            <!-- Mise en garde : discrète, mais au moment où elle compte —
+                 juste sous le bouton de confirmation. -->
+            <aside class="precautions" id="precautions" aria-labelledby="precautions-title">
+              <p class="precautions__title" id="precautions-title">Merci de reporter votre séance si&nbsp;:</p>
+              <ul>
+                <li><strong>Prise de sang</strong> dans les 15 jours qui viennent</li>
+                <li><strong>Grossesse</strong> de moins de trois mois</li>
+                <li><strong>Opération</strong> il y a moins d'un mois, ou prévue</li>
+              </ul>
+              <p class="precautions__note">
+                Un doute&nbsp;? <a href="mailto:contact@instants-reflexo.be">Écrivez à Patricia</a>
+                avant de réserver.
+              </p>
+            </aside>
           </form>
         </div>
 

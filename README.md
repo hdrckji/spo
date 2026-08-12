@@ -157,8 +157,23 @@ https://instants-reflexo.be/admin.html#LE_JETON
 Le fragment n'est jamais transmis au serveur, et la page l'efface de la barre
 d'adresse dès qu'elle l'a lu.
 
-Depuis cette page : consulter les rendez-vous, en annuler un (le client est
-prévenu par e-mail), bloquer ou rouvrir un vendredi.
+Depuis cette page : consulter les rendez-vous, **en déplacer un**, en annuler
+un, bloquer ou rouvrir un vendredi. Le client est prévenu par e-mail dans les
+deux premiers cas.
+
+**Le déplacement** propose uniquement les créneaux réellement libres, et pour
+une séance personnalisée uniquement ceux qui acceptent le moxa et le Psio.
+La collision n'est pas testée avant l'écriture : elle est empêchée par le
+même index unique que les réservations publiques, donc deux déplacements
+simultanés vers le même créneau ne peuvent pas aboutir tous les deux.
+
+L'e-mail envoyé au client porte un `.ics` de même UID que l'original, avec un
+`SEQUENCE` incrémenté (colonne `revision`). Les applications de calendrier
+**mettent donc à jour** le rendez-vous existant au lieu d'en ajouter un
+second à côté de l'ancien.
+
+L'administration n'est pas soumise au délai de prévenance de 24 h : Patricia
+peut déplacer un rendez-vous vers le lendemain matin si la situation l'exige.
 
 Bloquer un jour qui porte déjà des rendez-vous est refusé — il faudrait sinon
 annuler les rendez-vous d'abord, ce que l'interface demande explicitement.

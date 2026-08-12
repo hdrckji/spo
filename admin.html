@@ -52,6 +52,15 @@
     .rdv .tag { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--terra); }
     .rdv .msg { flex: 1 1 100%; font-size: .85rem; color: rgba(43,51,39,.7); font-style: italic; }
     .rdv button { padding: .35rem .9rem; font-size: .82rem; }
+    .rdv .actions { display: flex; gap: .4rem; }
+
+    /* Déplacement */
+    .move { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: .6rem; align-items: center;
+            margin-top: .7rem; padding-top: .8rem; border-top: 1px dashed var(--cream-3); }
+    .move label { font-size: .8rem; color: var(--sage); }
+    .move select { flex: 1 1 11rem; }
+    .move .spacer { flex: 1 1 auto; }
+    .move .warn { flex: 1 1 100%; font-size: .82rem; color: var(--terra); margin: 0; }
 
     .blocked-list { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-wrap: wrap; gap: .5rem; }
     .blocked-list li { display: flex; align-items: center; gap: .5rem; background: var(--cream); border-radius: 999px; padding: .35rem .5rem .35rem 1rem; font-size: .88rem; }
@@ -172,6 +181,104 @@
     }).format(new Date(iso + "T12:00:00Z"));
   }
 
+  /* ---------- Déplacement ---------- */
+
+  /* Un créneau convient si le serveur le dit libre et s'il accepte ce type de
+     séance : la personnalisée demande le moxa et le Psio, donc uniquement les
+     créneaux prévus pour. La même règle est revérifiée côté serveur. */
+  function eligibleSlots(day, sessionType) {
+    if (!day || day.blocked) return [];
+    return day.slots.filter((s) => {
+      if (!s.available) return false;
+      if (sessionType !== "personnalisee") return true;
+      const def = data.availability.slots.find((d) => d.id === s.id);
+      return Boolean(def && def.perso);
+    });
+  }
+
+  function buildMovePanel(b, row) {
+    const panel = document.createElement("div");
+    panel.className = "move";
+
+    const days = data.availability.days.filter((d) => eligibleSlots(d, b.session_type).length > 0);
+
+    if (!days.length) {
+      const warn = document.createElement("p");
+      warn.className = "warn";
+      warn.textContent =
+        b.session_type === "personnalisee"
+          ? "Aucun créneau 10h30 ou 16h00 n'est libre dans les prochaines semaines."
+          : "Aucun créneau n'est libre dans les prochaines semaines.";
+      panel.appendChild(warn);
+      return panel;
+    }
+
+    const dateLabel = document.createElement("label");
+    dateLabel.textContent = "Vers le";
+    const dateSel = document.createElement("select");
+    for (const d of days) {
+      const o = document.createElement("option");
+      o.value = d.date;
+      o.textContent = d.label;
+      dateSel.appendChild(o);
+    }
+
+    const slotSel = document.createElement("select");
+    function fillSlots() {
+      slotSel.innerHTML = "";
+      const day = data.availability.days.find((d) => d.date === dateSel.value);
+      for (const s of eligibleSlots(day, b.session_type)) {
+        const def = data.availability.slots.find((d) => d.id === s.id);
+        const o = document.createElement("option");
+        o.value = s.id;
+        o.textContent = def ? def.label : s.id;
+        slotSel.appendChild(o);
+      }
+    }
+    fillSlots();
+    dateSel.addEventListener("change", fillSlots);
+
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+
+    const confirm_ = document.createElement("button");
+    confirm_.textContent = "Déplacer";
+    confirm_.addEventListener("click", async () => {
+      confirm_.disabled = true;
+      confirm_.textContent = "Déplacement…";
+      try {
+        const r = await api({
+          method: "POST",
+          body: JSON.stringify({ action: "move", id: b.id, date: dateSel.value, slot: slotSel.value }),
+        });
+        say(
+          r.notified
+            ? `Rendez-vous déplacé au ${r.booking.dateLabel} (${r.booking.slot}). ${b.name} vient d'être prévenu·e par e-mail.`
+            : `Rendez-vous déplacé au ${r.booking.dateLabel} (${r.booking.slot}), mais l'e-mail n'a pas pu partir — prévenez ${b.name} directement.`,
+          r.notified ? "ok" : "err"
+        );
+        await refresh();
+      } catch (err) {
+        say(err.message, "err");
+        // Un 409 signifie que l'agenda a bougé entre-temps : on le recharge
+        // pour que la liste des créneaux libres redevienne exacte.
+        if (err.status === 409) await refresh().catch(() => {});
+        confirm_.disabled = false;
+        confirm_.textContent = "Déplacer";
+      }
+    });
+
+    // « Fermer » et non « Annuler » : le bouton voisin annule le rendez-vous,
+    // deux « Annuler » côte à côte pour deux gestes opposés serait piégeux.
+    const close = document.createElement("button");
+    close.className = "ghost";
+    close.textContent = "Fermer";
+    close.addEventListener("click", () => panel.remove());
+
+    panel.append(dateLabel, dateSel, slotSel, spacer, close, confirm_);
+    return panel;
+  }
+
   /* ---------- Rendus ---------- */
   function renderBookings() {
     const list = $("bookings-list");
@@ -222,6 +329,18 @@
         meta.className = "meta";
         meta.textContent = b.email + (b.phone ? " · " + b.phone : "");
 
+        const actions = document.createElement("div");
+        actions.className = "actions";
+
+        const moveBtn = document.createElement("button");
+        moveBtn.className = "ghost";
+        moveBtn.textContent = "Déplacer";
+        moveBtn.addEventListener("click", () => {
+          const existing = row.querySelector(".move");
+          if (existing) { existing.remove(); return; }
+          row.appendChild(buildMovePanel(b, row));
+        });
+
         const cancel = document.createElement("button");
         cancel.className = "ghost";
         cancel.textContent = "Annuler";
@@ -238,7 +357,8 @@
           }
         });
 
-        row.append(slot, who, tag, meta, cancel);
+        actions.append(moveBtn, cancel);
+        row.append(slot, who, tag, meta, actions);
 
         if (b.message) {
           const msg = document.createElement("span");
