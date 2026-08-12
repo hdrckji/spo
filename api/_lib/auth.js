@@ -62,15 +62,29 @@ export function newCancelToken() {
 
 /**
  * Hachage de l'adresse IP pour la limitation de débit.
- * On ne conserve jamais l'IP en clair : le sel est ADMIN_TOKEN, donc le
- * hachage n'est pas rejouable hors du site.
+ *
+ * L'IP n'est jamais conservée en clair. Le sel est ADMIN_TOKEN, ce qui rend
+ * le hachage non rejouable hors du site.
+ *
+ * Si ADMIN_TOKEN manque ou est trop court, on hache quand même — avec un sel
+ * constant, faute de mieux. La limitation de débit continue de fonctionner
+ * (le hachage reste déterministe) et surtout, aucune adresse IP n'atterrit
+ * en clair dans la base à cause d'une variable d'environnement mal réglée.
  */
+const FALLBACK_SALT = "instants-reflexo:rate-limit:no-admin-token";
+
 export function hashIP(req) {
   const forwarded = req.headers?.["x-forwarded-for"] || "";
   const ip = String(forwarded).split(",")[0].trim() || req.socket?.remoteAddress || "unknown";
+
+  let salt;
   try {
-    return createHmac("sha256", secret()).update(ip).digest("hex").slice(0, 32);
+    salt = secret();
   } catch {
-    return "unsalted:" + ip;
+    console.error(
+      "[auth] ADMIN_TOKEN absent ou trop court — hachage des IP avec un sel constant. Voir README.md."
+    );
+    salt = FALLBACK_SALT;
   }
+  return createHmac("sha256", salt).update(ip).digest("hex").slice(0, 32);
 }
