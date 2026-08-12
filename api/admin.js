@@ -8,9 +8,17 @@
  */
 
 import { SLOT_BY_ID, TYPES, longLabel, nextFridays, siteURL } from "./_lib/config.js";
-import { adminTokenProblem, calendarToken, isAdmin } from "./_lib/auth.js";
+import { adminTokenProblem, calendarToken, hashIP, isAdmin } from "./_lib/auth.js";
 import { isConfigured, sql } from "./_lib/db.js";
 import { sendCancellationEmail } from "./_lib/mail.js";
+import {
+  MAX_ADMIN_FAILURES,
+  WINDOW_MINUTES,
+  clearFailures,
+  pause,
+  recentFailures,
+  recordFailure,
+} from "./_lib/throttle.js";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -41,13 +49,37 @@ export default async function handler(req, res) {
     });
   }
 
-  if (!isAdmin(req)) {
-    res.setHeader("WWW-Authenticate", 'Bearer realm="admin"');
-    return res.status(401).json({ ok: false, error: "Jeton invalide." });
-  }
-
   if (!isConfigured()) {
     return res.status(503).json({ ok: false, error: "Base de données non configurée." });
+  }
+
+  /* ---- Limitation des tentatives ----
+     C'est elle qui protège l'agenda, davantage que la longueur du jeton.
+     Le compteur est vérifié avant l'authentification, sinon il suffirait de
+     réessayer indéfiniment. */
+  const ipHash = hashIP(req);
+  try {
+    if ((await recentFailures(ipHash)) >= MAX_ADMIN_FAILURES) {
+      console.warn("[admin] trop de tentatives échouées, accès bloqué temporairement");
+      res.setHeader("Retry-After", String(WINDOW_MINUTES * 60));
+      return res.status(429).json({
+        ok: false,
+        error: `Trop de tentatives échouées. Réessayez dans ${WINDOW_MINUTES} minutes.`,
+      });
+    }
+
+    if (!isAdmin(req)) {
+      await recordFailure(ipHash);
+      await pause();
+      res.setHeader("WWW-Authenticate", 'Bearer realm="admin"');
+      return res.status(401).json({ ok: false, error: "Jeton invalide." });
+    }
+
+    // Se tromper puis réussir ne doit pas laisser de trace pénalisante.
+    await clearFailures(ipHash);
+  } catch (err) {
+    console.error("[admin] erreur lors du contrôle des tentatives :", err);
+    return res.status(500).json({ ok: false, error: "Erreur serveur." });
   }
 
   try {

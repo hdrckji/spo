@@ -128,7 +128,7 @@ fonctions du dossier `api/` automatiquement — il n'y a pas d'étape de build.
 | Variable | Requise | Rôle |
 |---|---|---|
 | `DATABASE_URL` | **oui** | Chaîne de connexion Neon (pooled). Sans elle, la réservation répond `503` au lieu de faire semblant de fonctionner. |
-| `ADMIN_TOKEN` | **oui** | Ouvre `/admin.html`. Sert aussi de sel au hachage des IP et à dériver le jeton du flux ICS. Minimum 24 caractères. |
+| `ADMIN_TOKEN` | **oui** | Ouvre `/admin.html`. Sert aussi de sel au hachage des IP et à dériver le jeton du flux ICS. Minimum 8 caractères — voir *Pourquoi un mot de passe court suffit* ci-dessous. |
 | `RESEND_API_KEY` | **oui** en production | Clé API Resend. Absente, la réservation est **quand même enregistrée** et l'utilisateur est informé que l'e-mail n'est pas parti. |
 | `RESEND_FROM` | non | Expéditeur vérifié. Défaut : `Instants Réflexo <contact@instants-reflexo.be>`. |
 | `RESERVATION_EMAIL` | non | Destinataire des notifications. Défaut : `contact@instants-reflexo.be`. |
@@ -173,6 +173,27 @@ fournisseur particulier.
 Le jeton de cette adresse est dérivé d'`ADMIN_TOKEN` par HMAC : la partager
 ne donne aucun accès à l'administration. Elle expose en revanche les
 coordonnées des clients — elle reste donc privée.
+
+### Pourquoi un mot de passe court suffit
+
+`ADMIN_TOKEN` n'a besoin que de 8 caractères, ce qui laisse le choix d'un mot
+de passe retenable. Ce n'est pas sa longueur qui protège l'agenda, c'est la
+limitation des tentatives : **5 échecs par quart d'heure et par adresse IP**,
+puis refus pendant 15 minutes, avec un ralentissement de 400 ms à chaque
+échec.
+
+À ce rythme, deviner un secret de 8 caractères demanderait un temps
+astronomique. La limite s'applique par adresse, de sorte qu'un attaquant qui
+sature le compteur ne peut pas verrouiller Patricia hors de son propre
+agenda. Une connexion réussie efface les échecs précédents.
+
+Ce que la limitation ne protège pas, c'est une **fuite** du jeton : si
+quelqu'un le lit par-dessus une épaule ou récupère le favori, la longueur n'y
+change rien. Une phrase de passe de quatre mots reste donc préférable — mais
+c'est un choix, pas une obligation technique.
+
+Pour durcir ou assouplir : `MAX_ADMIN_FAILURES` et `WINDOW_MINUTES` dans
+`api/_lib/throttle.js`, `MIN_TOKEN_LENGTH` dans `api/_lib/auth.js`.
 
 ### Changer un créneau ou un tarif
 

@@ -71,6 +71,22 @@ create index if not exists reserve_attempts_lookup_idx
   on reserve_attempts (ip_hash, created_at desc);
 
 -- ------------------------------------------------------------
+--  Tentatives d'accès à l'administration.
+--
+--  C'est ce qui rend acceptable un ADMIN_TOKEN court : au-delà de quelques
+--  échecs par quart d'heure et par adresse, l'accès est refusé. Là encore,
+--  seul un hachage de l'IP est conservé.
+-- ------------------------------------------------------------
+create table if not exists admin_attempts (
+  id         bigserial primary key,
+  ip_hash    text        not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists admin_attempts_lookup_idx
+  on admin_attempts (ip_hash, created_at desc);
+
+-- ------------------------------------------------------------
 --  Purge RGPD — limitation de la durée de conservation.
 --  Appelée par le cron quotidien (voir api/cron/purge.js).
 -- ------------------------------------------------------------
@@ -89,6 +105,9 @@ begin
   delete from reserve_attempts
    where created_at < now() - interval '7 days';
   get diagnostics a = row_count;
+
+  delete from admin_attempts
+   where created_at < now() - interval '7 days';
 
   return query select b, a;
 end;

@@ -12,8 +12,19 @@
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-/** Longueur minimale d'ADMIN_TOKEN : c'est la seule protection de l'agenda. */
-export const MIN_TOKEN_LENGTH = 24;
+/**
+ * Longueur minimale d'ADMIN_TOKEN.
+ *
+ * Volontairement basse pour qu'un mot de passe retenable convienne. Ce n'est
+ * pas la longueur qui protège l'agenda, c'est la limitation des tentatives
+ * (voir throttle.js) : au-delà de MAX_ADMIN_FAILURES échecs par fenêtre et
+ * par adresse IP, la page se ferme. Deviner un secret de 8 caractères à
+ * raison de quelques essais par heure prendrait des millénaires.
+ *
+ * Une phrase de passe reste préférable — elle protège aussi contre une fuite
+ * du jeton, ce que la limitation de débit ne peut pas faire.
+ */
+export const MIN_TOKEN_LENGTH = 8;
 
 /**
  * Décrit ce qui cloche avec ADMIN_TOKEN, ou null si tout va bien.
