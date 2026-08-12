@@ -98,8 +98,14 @@ p + p { margin-top: 1rem; }
   transition: transform 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out),
               background 0.35s, color 0.35s, border-color 0.35s;
 }
-.btn:hover { transform: translateY(-2px); }
-.btn:active { transform: translateY(0); }
+.btn:hover:not(:disabled) { transform: translateY(-2px); }
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
 
 .btn--primary {
   background: var(--terra);
@@ -423,6 +429,87 @@ p + p { margin-top: 1rem; }
   padding-left: 1rem;
 }
 
+/* Précautions — situations où la séance se reporte */
+.precautions {
+  margin-top: clamp(2.5rem, 5vw, 4rem);
+  background: var(--white);
+  border: 1.5px solid var(--cream-3);
+  border-radius: var(--radius);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  box-shadow: var(--shadow-soft);
+}
+
+.precautions__head {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  margin-bottom: 1.4rem;
+}
+.precautions__icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  color: var(--terra);
+}
+.precautions__head h3 {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2.6vw, 1.6rem);
+  font-weight: 500;
+  color: var(--forest-deep);
+  margin-top: 0.2rem;
+}
+
+.precautions__lead {
+  color: rgba(43, 51, 39, 0.75);
+  max-width: 44rem;
+}
+
+.precautions__list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.2rem;
+  margin: 1.6rem 0 0;
+}
+.precautions__list li {
+  background: var(--cream);
+  border-radius: 14px;
+  border-left: 3px solid var(--terra);
+  padding: 1.1rem 1.25rem;
+}
+.precautions__list strong {
+  display: block;
+  font-weight: 500;
+  color: var(--forest-deep);
+  margin-bottom: 0.35rem;
+}
+.precautions__list span {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: rgba(43, 51, 39, 0.72);
+}
+
+.precautions__note {
+  margin-top: 1.6rem;
+  font-size: 0.87rem;
+  color: rgba(43, 51, 39, 0.6);
+  border-left: 2px solid var(--sage-soft);
+  padding-left: 1rem;
+}
+.precautions__note a { color: var(--terra); }
+
+/* Rappel compact au-dessus du module de réservation */
+.section__sub--warn {
+  font-size: 0.9rem;
+  color: rgba(43, 51, 39, 0.62);
+  max-width: 38rem;
+  margin-top: 0.6rem;
+}
+.section__sub--warn a {
+  color: var(--terra);
+  text-underline-offset: 3px;
+}
+
 /* ---------- 02 · La praticienne ---------- */
 .patricia__grid {
   display: grid;
@@ -640,8 +727,23 @@ p + p { margin-top: 1rem; }
   transition: border-color 0.3s, background 0.3s;
   text-transform: capitalize;
 }
-.date-pill:hover { border-color: rgba(43, 51, 39, 0.25); }
+.date-pill:hover:not(:disabled) { border-color: rgba(43, 51, 39, 0.25); }
 .date-pill.is-active { border-color: var(--terra); background: #fbf3ec; font-weight: 500; }
+.date-pill:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* Réservation indisponible : la base ou l'API ne répond pas. */
+.booking__offline {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: rgba(43, 51, 39, 0.75);
+}
+.booking__offline a { color: var(--terra); }
 
 /* Créneaux */
 .slot-grid {
@@ -767,6 +869,29 @@ p + p { margin-top: 1rem; }
 .booking__success h3 { font-size: 1.8rem; margin-bottom: 0.8rem; }
 .booking__success p { max-width: 26rem; color: rgba(43, 51, 39, 0.75); }
 .booking__success-note { font-size: 0.85rem; font-style: italic; margin-top: 0.8rem; }
+/* L'enregistrement a réussi mais l'e-mail n'est pas parti : on le signale. */
+.booking__success-note.is-warning {
+  font-style: normal;
+  color: var(--terra);
+  background: #fbf3ec;
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+}
+.booking__success:focus { outline: none; }
+.booking__success:focus-visible { outline: 2px solid var(--terra); outline-offset: 4px; }
+
+/* Repli sans JavaScript */
+.booking__noscript {
+  max-width: 46rem;
+  margin: 0 auto 1.6rem;
+  padding: 1.1rem 1.4rem;
+  background: var(--white);
+  border-radius: 14px;
+  border: 1.5px solid var(--cream-3);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+.booking__noscript a { color: var(--terra); }
 
 /* ---------- 05 · Accès ---------- */
 .acces__grid {
@@ -871,6 +996,13 @@ p + p { margin-top: 1rem; }
 .reveal.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+/* Sans JavaScript, l'observateur d'intersection ne tourne jamais : le contenu
+   doit rester visible plutôt que de disparaître derrière une opacité nulle. */
+.no-js .reveal {
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

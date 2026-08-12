@@ -1,0 +1,13 @@
+{
+  "name": "instants-reflexo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Site Instants Réflexo — réflexologie plantaire à Péruwelz, avec réservation en ligne.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0"
+  }
+}

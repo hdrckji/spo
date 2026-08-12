@@ -1,14 +1,20 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="no-js">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Retiré immédiatement si JavaScript est actif. Sans lui, les blocs animés
+       à l'apparition doivent rester visibles au lieu de rester à opacité 0. -->
+  <script>document.documentElement.classList.remove("no-js");</script>
   <title>Instants Réflexo — Réflexologie plantaire à Péruwelz · Patricia Valck</title>
   <meta name="description" content="Réflexologie plantaire à Péruwelz. Patricia Valck, diplômée de l'école de Métaréflexologie d'Arlette Lefebvre, vous accueille le vendredi au Centre Petite Fontaine. Réservation en ligne.">
   <meta property="og:title" content="Instants Réflexo — Réflexologie plantaire à Péruwelz">
   <meta property="og:description" content="Un instant rien qu'à vous. Séances de réflexologie plantaire, moxa et relaxation Psio, chaque vendredi à Péruwelz.">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="fr_BE">
+  <meta property="og:url" content="https://instants-reflexo.be/">
+  <meta name="theme-color" content="#3f5443">
+  <link rel="canonical" href="https://instants-reflexo.be/">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%233f5443'/%3E%3Cpath d='M50 22 C 66 34 70 52 50 78 C 30 52 34 34 50 22 Z' fill='%23f6f1e7'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -217,6 +223,51 @@
           </p>
         </div>
       </div>
+
+      <!-- Précautions : situations où la séance se reporte -->
+      <aside class="precautions reveal" id="precautions" aria-labelledby="precautions-title">
+        <div class="precautions__head">
+          <svg class="precautions__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M24 6 L 44 40 L 4 40 Z"/>
+            <path d="M24 19 L 24 29"/>
+            <circle cx="24" cy="34.5" r="1.4" fill="currentColor" stroke="none"/>
+          </svg>
+          <div>
+            <p class="eyebrow">À savoir avant de réserver</p>
+            <h3 id="precautions-title">Quand reporter votre séance</h3>
+          </div>
+        </div>
+
+        <p class="precautions__lead">
+          La réflexologie plantaire est douce, mais elle stimule la circulation et
+          l'élimination. Dans trois situations, mieux vaut attendre&nbsp;:
+        </p>
+
+        <ul class="precautions__list">
+          <li>
+            <strong>Prise de sang</strong>
+            <span>Pas de séance dans les 15&nbsp;jours qui précèdent un prélèvement&nbsp;: la
+            stimulation peut influencer les résultats de l'analyse.</span>
+          </li>
+          <li>
+            <strong>Grossesse</strong>
+            <span>Pas de séance pendant les trois premiers mois. Au-delà, parlez-en à
+            Patricia&nbsp;: la séance est alors adaptée.</span>
+          </li>
+          <li>
+            <strong>Opération</strong>
+            <span>Pas de séance avant une intervention chirurgicale, ni dans le mois qui
+            la suit. Laissez au corps le temps de récupérer.</span>
+          </li>
+        </ul>
+
+        <p class="precautions__note">
+          Un doute, un traitement en cours, une question&nbsp;? Écrivez à Patricia avant de
+          réserver&nbsp;: <a href="mailto:contact@instants-reflexo.be">contact@instants-reflexo.be</a>.
+          En cas de problème de santé, l'avis de votre médecin prime toujours.
+        </p>
+      </aside>
     </section>
 
     <!-- ===== 02 · La praticienne ===== -->
@@ -317,19 +368,32 @@
         <p class="eyebrow">Réservation</p>
         <h2>Réservez votre <em>instant</em></h2>
         <p class="section__sub">Les séances ont lieu le vendredi, au Centre Petite Fontaine à Péruwelz.</p>
+        <p class="section__sub section__sub--warn">
+          Prise de sang, grossesse de moins de trois mois, opération récente ou à venir&nbsp;?
+          <a href="#precautions">Consultez les précautions</a> avant de réserver.
+        </p>
       </div>
+
+      <noscript>
+        <p class="booking__noscript">
+          La réservation en ligne nécessite JavaScript. Vous pouvez aussi réserver
+          par e-mail à <a href="mailto:contact@instants-reflexo.be">contact@instants-reflexo.be</a> —
+          précisez le vendredi et le créneau souhaités (9h30, 10h30, 14h00, 15h00 ou 16h00),
+          ainsi que le type de séance.
+        </p>
+      </noscript>
 
       <div class="booking reveal" id="booking">
         <div class="booking__left">
           <div class="booking__step">
             <p class="booking__step-title"><span>1</span>Votre séance</p>
             <div class="type-choice" id="type-choice">
-              <button type="button" class="type-card is-active" data-type="classique">
+              <button type="button" class="type-card is-active" data-type="classique" aria-pressed="true">
                 <strong>Classique</strong>
                 <span class="type-card__price">65&nbsp;€</span>
                 <span class="type-card__desc">Réflexologie plantaire — 1h</span>
               </button>
-              <button type="button" class="type-card" data-type="personnalisee">
+              <button type="button" class="type-card" data-type="personnalisee" aria-pressed="false">
                 <strong>Personnalisée</strong>
                 <span class="type-card__price">85&nbsp;€</span>
                 <span class="type-card__desc">Moxa &amp; Psio — 10h30 ou 16h</span>
@@ -380,16 +444,16 @@
             </div>
             <input type="text" name="website" id="f-website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
             <p class="form-error" id="form-error" role="alert" hidden></p>
-            <button type="submit" class="btn btn--primary btn--full" id="submit-btn">Confirmer ma demande</button>
-            <p class="form-note">Votre demande est confirmée par e-mail dans les plus brefs délais. Paiement sur place.</p>
+            <button type="submit" class="btn btn--primary btn--full" id="submit-btn">Confirmer ma réservation</button>
+            <p class="form-note">Le créneau est réservé immédiatement et vous recevez la confirmation par e-mail, avec un lien d'annulation. Paiement sur place.</p>
           </form>
         </div>
 
-        <div class="booking__success" id="booking-success" hidden>
+        <div class="booking__success" id="booking-success" role="status" tabindex="-1" hidden>
           <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" stroke-width="3"/><path d="M30 52 L 44 66 L 72 36" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <h3>Demande envoyée&nbsp;!</h3>
+            <h3>Rendez-vous confirmé&nbsp;!</h3>
             <p id="success-recap"></p>
-            <p class="booking__success-note">Vous recevrez une confirmation par e-mail. À très bientôt.</p>
+            <p class="booking__success-note" id="success-note"></p>
         </div>
       </div>
     </section>
