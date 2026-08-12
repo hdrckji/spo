@@ -8,7 +8,7 @@
  */
 
 import { SLOT_BY_ID, TYPES, longLabel, nextFridays, siteURL } from "./_lib/config.js";
-import { calendarToken, isAdmin } from "./_lib/auth.js";
+import { adminTokenProblem, calendarToken, isAdmin } from "./_lib/auth.js";
 import { isConfigured, sql } from "./_lib/db.js";
 import { sendCancellationEmail } from "./_lib/mail.js";
 
@@ -30,9 +30,15 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex");
 
-  if (!process.env.ADMIN_TOKEN) {
-    console.error("[admin] ADMIN_TOKEN absent — administration désactivée. Voir README.md.");
-    return res.status(503).json({ ok: false, error: "Administration non configurée." });
+  // Un jeton serveur inutilisable n'est pas un jeton refusé : on le dit
+  // explicitement, sinon on cherche l'erreur du côté de la saisie.
+  const problem = adminTokenProblem();
+  if (problem) {
+    console.error("[admin] administration désactivée —", problem);
+    return res.status(503).json({
+      ok: false,
+      error: `Administration mal configurée sur le serveur : ${problem} Corrigez la variable dans Vercel, puis redéployez.`,
+    });
   }
 
   if (!isAdmin(req)) {

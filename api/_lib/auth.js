@@ -12,14 +12,32 @@
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-function secret() {
+/** Longueur minimale d'ADMIN_TOKEN : c'est la seule protection de l'agenda. */
+export const MIN_TOKEN_LENGTH = 24;
+
+/**
+ * Décrit ce qui cloche avec ADMIN_TOKEN, ou null si tout va bien.
+ *
+ * Sert à distinguer deux situations que l'utilisateur confondrait sinon :
+ * « le jeton du serveur est inutilisable » et « tu as saisi le mauvais
+ * jeton ». Sans ça, un ADMIN_TOKEN trop court se manifeste par un simple
+ * « jeton refusé », et on cherche l'erreur du mauvais côté.
+ */
+export function adminTokenProblem() {
   const value = process.env.ADMIN_TOKEN;
-  if (!value || value.length < 24) {
-    throw new Error(
-      "ADMIN_TOKEN doit être défini et faire au moins 24 caractères. Voir README.md."
-    );
+  if (!value) {
+    return "ADMIN_TOKEN n'est pas défini dans les variables d'environnement.";
   }
-  return value;
+  if (value.length < MIN_TOKEN_LENGTH) {
+    return `ADMIN_TOKEN ne fait que ${value.length} caractères ; il en faut au moins ${MIN_TOKEN_LENGTH}.`;
+  }
+  return null;
+}
+
+function secret() {
+  const problem = adminTokenProblem();
+  if (problem) throw new Error(problem + " Voir README.md.");
+  return process.env.ADMIN_TOKEN;
 }
 
 /** Comparaison à temps constant, tolérante aux longueurs différentes. */
