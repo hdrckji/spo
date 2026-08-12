@@ -15,6 +15,7 @@ import { isConfigured, isSlotTaken, sql } from "./_lib/db.js";
 import { hashIP, newCancelToken } from "./_lib/auth.js";
 import { isValidEmail, sendBookingEmails } from "./_lib/mail.js";
 import { validateRequest } from "./_lib/availability.js";
+import { ensureSchema } from "./_lib/migrate.js";
 
 /** Tentatives autorisées par heure et par adresse IP. */
 const RATE_LIMIT = 5;
@@ -76,6 +77,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Porte le schéma à niveau si le déploiement en a changé la forme.
+    // Sans effet et sans requête une fois la fonction chaude.
+    await ensureSchema();
+
     const check = await validateRequest({ date, slot, type });
     if (!check.ok) {
       return res.status(check.status).json({ ok: false, error: check.error });

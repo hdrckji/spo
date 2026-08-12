@@ -12,6 +12,7 @@ import { calendarToken, isAdmin } from "./_lib/auth.js";
 import { isConfigured, isSlotTaken, sql } from "./_lib/db.js";
 import { getAvailability, validateRequest } from "./_lib/availability.js";
 import { sendCancellationEmail, sendMoveEmail } from "./_lib/mail.js";
+import { ensureSchema } from "./_lib/migrate.js";
 
 /**
  * L'administration n'est pas soumise au délai de prévenance : Patricia doit
@@ -52,6 +53,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Porte le schéma à niveau si le déploiement en a changé la forme.
+    // Sans effet et sans requête une fois la fonction chaude.
+    await ensureSchema();
+
     if (req.method === "GET") return await list(res);
     if (req.method === "POST") return await act(readBody(req), res);
     res.setHeader("Allow", "GET, POST");

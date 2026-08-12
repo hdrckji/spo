@@ -12,6 +12,7 @@ import { TYPES, longLabel, CONTACT_EMAIL } from "./_lib/config.js";
 import { isConfigured, sql } from "./_lib/db.js";
 import { SLOT_BY_ID } from "./_lib/config.js";
 import { sendCancellationEmail } from "./_lib/mail.js";
+import { ensureSchema } from "./_lib/migrate.js";
 
 function escapeHTML(value) {
   return String(value ?? "").replace(
@@ -92,6 +93,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Porte le schéma à niveau si le déploiement en a changé la forme.
+    // Sans effet et sans requête une fois la fonction chaude.
+    await ensureSchema();
+
     const [booking] = await sql`
       select id,
              to_char(booking_date, 'YYYY-MM-DD') as booking_date,

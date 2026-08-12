@@ -30,7 +30,8 @@ script.js           navigation, animations, module de réservation
 robots.txt          /admin.html et /api exclus de l'indexation
 sitemap.xml
 vercel.json         cron de purge + en-têtes de sécurité
-db/schema.sql       schéma Postgres, idempotent
+db/schema.sql       schéma Postgres — GÉNÉRÉ, pour consultation
+scripts/            génération de db/schema.sql
 
 api/
   availability.js   GET  — vendredis, créneaux et disponibilité réelle
@@ -42,6 +43,8 @@ api/
   _lib/
     config.js       créneaux, tarifs, lieu, calculs de dates
     availability.js composition des disponibilités + revalidation
+    schema.js       schéma — source unique de vérité
+    migrate.js      mise à niveau automatique du schéma
     db.js           client Neon
     mail.js         envois Resend (praticienne + client)
     ics.js          génération iCalendar
@@ -90,11 +93,16 @@ Créez un projet [Neon](https://neon.tech) **en région européenne**
 (`eu-central-1`, Francfort) — les données contiennent des informations
 personnelles de résidents belges.
 
-Ouvrez l'éditeur SQL du projet et exécutez le contenu de `db/schema.sql`.
-Le script est idempotent : le rejouer après une modification ne casse rien.
-
 Copiez la chaîne de connexion *pooled* (celle qui contient `-pooler`) :
-c'est la valeur de `DATABASE_URL`.
+c'est la valeur de `DATABASE_URL`. **C'est tout.**
+
+Il n'y a pas de SQL à exécuter, ni à la mise en service, ni aux déploiements
+suivants. Au premier appel qui touche la base, `api/_lib/migrate.js` crée ou
+met à niveau le schéma tout seul, puis note la version appliquée dans une
+table `schema_meta`. Les appels suivants n'y reviennent pas.
+
+Le fichier `db/schema.sql` reste consultable, mais il est **généré** depuis
+`api/_lib/schema.js` (`npm run schema:sql`) et n'a pas à être exécuté.
 
 ### 2. Envoi des e-mails
 
@@ -188,6 +196,25 @@ fournisseur particulier.
 Le jeton de cette adresse est dérivé d'`ADMIN_TOKEN` par HMAC : la partager
 ne donne aucun accès à l'administration. Elle expose en revanche les
 coordonnées des clients — elle reste donc privée.
+
+### Faire évoluer le schéma
+
+Ajoutez l'instruction — idempotente : `if not exists`, `or replace`,
+`add column if not exists` — dans `STATEMENTS` de `api/_lib/schema.js`, puis
+incrémentez `SCHEMA_VERSION` juste au-dessus. Rien d'autre. Au déploiement
+suivant, la première requête qui touche la base applique la modification.
+
+Ne modifiez jamais `db/schema.sql` à la main : il est régénéré par
+`npm run schema:sql`.
+
+Deux instances qui démarrent à froid en même temps ne peuvent pas migrer
+simultanément : la migration s'exécute dans une transaction précédée d'un
+verrou consultatif Postgres. La seconde attend, puis rejoue des instructions
+sans effet.
+
+Ce raccourci se justifie par l'échelle — une praticienne, un déploiement à la
+fois. Sur un projet où plusieurs personnes livrent en parallèle, un véritable
+outil de migration versionnée resterait préférable.
 
 ### Changer un créneau ou un tarif
 

@@ -13,6 +13,7 @@ import { SLOT_BY_ID, TYPES, slotInstants } from "./_lib/config.js";
 import { isCalendarToken } from "./_lib/auth.js";
 import { isConfigured, sql } from "./_lib/db.js";
 import { buildICS } from "./_lib/ics.js";
+import { ensureSchema } from "./_lib/migrate.js";
 
 /** Fenêtre du flux : un peu de passé pour l'historique, large devant. */
 const PAST_DAYS = 60;
@@ -34,6 +35,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Porte le schéma à niveau si le déploiement en a changé la forme.
+    // Sans effet et sans requête une fois la fonction chaude.
+    await ensureSchema();
+
     const rows = await sql`
       select id,
              to_char(booking_date, 'YYYY-MM-DD') as booking_date,

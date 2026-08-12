@@ -10,6 +10,7 @@
  */
 
 import { isConfigured, sql } from "../_lib/db.js";
+import { ensureSchema } from "../_lib/migrate.js";
 
 const RETENTION_MONTHS = Number(process.env.RETENTION_MONTHS || 12);
 
@@ -30,6 +31,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Porte le schéma à niveau si le déploiement en a changé la forme.
+    // Sans effet et sans requête une fois la fonction chaude.
+    await ensureSchema();
+
     const [result] = await sql`select * from purge_old_data(${RETENTION_MONTHS})`;
     console.log(
       `[purge] ${result.deleted_bookings} réservation(s) et ${result.deleted_attempts} trace(s) supprimées.`
