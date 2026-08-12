@@ -1,92 +1,165 @@
 /**
- * Réception des demandes de réservation — Vercel Serverless Function.
+ * POST /api/reserve — enregistrement d'une réservation.
  *
- * Envoi d'e-mails via l'API Resend (https://resend.com) :
- *   - RESEND_API_KEY      : clé API Resend (variable d'environnement Vercel)
- *   - RESERVATION_EMAIL   : destinataire des notifications
- *                           (défaut : contact@instants-reflexo.be)
- *   - RESEND_FROM         : expéditeur vérifié chez Resend
- *                           (défaut : onboarding@resend.dev, utilisable sans
- *                           vérification de domaine pour les tests)
- *
- * Sans RESEND_API_KEY, la demande est simplement journalisée (mode démo)
- * et la réponse reste positive pour ne pas bloquer le parcours utilisateur.
+ * Garanties :
+ *   - le créneau est verrouillé par un index unique partiel en base, donc
+ *     deux demandes simultanées ne peuvent pas prendre le même créneau ;
+ *   - le tarif et le libellé du créneau sont *recalculés* côté serveur : ce
+ *     que le navigateur envoie n'est jamais repris tel quel ;
+ *   - si l'envoi des e-mails échoue, la réservation reste valide et la
+ *     réponse le dit explicitement — pas de succès de façade.
  */
+
+import { SLOT_BY_ID, TYPES, longLabel } from "./_lib/config.js";
+import { isConfigured, isSlotTaken, sql } from "./_lib/db.js";
+import { hashIP, newCancelToken } from "./_lib/auth.js";
+import { isValidEmail, sendBookingEmails } from "./_lib/mail.js";
+import { validateRequest } from "./_lib/availability.js";
+
+/** Tentatives autorisées par heure et par adresse IP. */
+const RATE_LIMIT = 5;
+
+const MAX = { name: 120, email: 254, phone: 40, message: 2000 };
+
+function clean(value, max) {
+  return String(value ?? "").trim().slice(0, max);
+}
+
+function readBody(req) {
+  if (!req.body) return {};
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return req.body;
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, error: "Méthode non autorisée" });
   }
 
-  const {
-    type = "",
-    price = "",
-    date = "",
-    dateLabel = "",
-    slot = "",
-    name = "",
-    email = "",
-    phone = "",
-    message = "",
-    website = "",
-  } = req.body || {};
+  const body = readBody(req);
 
-  // Honeypot anti-spam : un humain ne remplit jamais ce champ.
-  if (website) {
+  // Pot de miel : un humain ne remplit jamais ce champ. On répond comme si
+  // tout allait bien pour ne rien apprendre au robot.
+  if (body.website) {
     return res.status(200).json({ ok: true });
   }
 
-  if (!name || !email || !date || !slot || !type) {
-    return res.status(400).json({ ok: false, error: "Champs manquants" });
+  if (!isConfigured()) {
+    console.error("[reserve] DATABASE_URL absente — réservation impossible. Voir README.md.");
+    return res.status(503).json({
+      ok: false,
+      error:
+        "Le module de réservation est momentanément indisponible. Écrivez-nous à contact@instants-reflexo.be.",
+    });
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.RESERVATION_EMAIL || "contact@instants-reflexo.be";
-  const from = process.env.RESEND_FROM || "Instants Réflexo <onboarding@resend.dev>";
+  const date = clean(body.date, 10);
+  const slot = clean(body.slot, 5);
+  const type = clean(body.type, 20);
+  const name = clean(body.name, MAX.name);
+  const email = clean(body.email, MAX.email).toLowerCase();
+  const phone = clean(body.phone, MAX.phone);
+  const message = clean(body.message, MAX.message);
 
-  const recap = [
-    `Séance     : ${type} (${price} €)`,
-    `Date       : ${dateLabel} (${date})`,
-    `Créneau    : ${slot}`,
-    ``,
-    `Client·e   : ${name}`,
-    `E-mail     : ${email}`,
-    `Téléphone  : ${phone || "—"}`,
-    ``,
-    `Message    :`,
-    message || "—",
-  ].join("\n");
-
-  if (!apiKey) {
-    console.log("[reserve] mode démo — demande reçue :\n" + recap);
-    return res.status(200).json({ ok: true, demo: true });
+  if (!name || !email) {
+    return res.status(400).json({ ok: false, error: "Nom et adresse e-mail sont requis." });
+  }
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ ok: false, error: "L'adresse e-mail semble invalide." });
   }
 
   try {
-    const r = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: [to],
-        reply_to: email,
-        subject: `Réservation — ${type} · ${dateLabel} · ${slot} — ${name}`,
-        text: recap,
-      }),
-    });
-
-    if (!r.ok) {
-      const detail = await r.text();
-      console.error("[reserve] échec Resend :", r.status, detail);
-      return res.status(502).json({ ok: false, error: "Échec de l'envoi" });
+    const check = await validateRequest({ date, slot, type });
+    if (!check.ok) {
+      return res.status(check.status).json({ ok: false, error: check.error });
     }
 
-    return res.status(200).json({ ok: true });
+    /* ---- Limitation de débit ---- */
+    const ipHash = hashIP(req);
+    const [{ count }] = await sql`
+      select count(*)::int as count
+        from reserve_attempts
+       where ip_hash = ${ipHash}
+         and created_at > now() - interval '1 hour'
+    `;
+    if (count >= RATE_LIMIT) {
+      return res.status(429).json({
+        ok: false,
+        error: "Trop de demandes envoyées. Réessayez dans une heure ou écrivez-nous directement.",
+      });
+    }
+    await sql`insert into reserve_attempts (ip_hash) values (${ipHash})`;
+
+    /* ---- Enregistrement ---- */
+    const typeDef = TYPES[type];
+    const slotDef = SLOT_BY_ID.get(slot);
+    const cancelToken = newCancelToken();
+
+    let inserted;
+    try {
+      [inserted] = await sql`
+        insert into bookings
+          (booking_date, slot, session_type, price_cents, name, email, phone, message, cancel_token, ip_hash)
+        values
+          (${date}::date, ${slot}, ${type}, ${typeDef.price * 100}, ${name}, ${email},
+           ${phone || null}, ${message || null}, ${cancelToken}, ${ipHash})
+        returning id
+      `;
+    } catch (err) {
+      if (isSlotTaken(err)) {
+        return res.status(409).json({
+          ok: false,
+          code: "slot_taken",
+          error: "Ce créneau vient d'être réservé. Merci d'en choisir un autre.",
+        });
+      }
+      throw err;
+    }
+
+    /* ---- Notifications ---- */
+    const booking = {
+      id: inserted.id,
+      booking_date: date,
+      slot,
+      slot_label: slotDef.label,
+      session_type: type,
+      name,
+      email,
+      phone,
+      message,
+      cancel_token: cancelToken,
+    };
+
+    const mail = await sendBookingEmails(booking);
+    if (!mail.practitioner || !mail.client) {
+      console.error("[reserve] réservation", inserted.id, "enregistrée mais e-mails partiels :", mail);
+    }
+
+    return res.status(201).json({
+      ok: true,
+      emailed: mail.client,
+      booking: {
+        date,
+        dateLabel: longLabel(date),
+        slot: slotDef.label,
+        type: typeDef.label,
+        price: typeDef.price,
+        name,
+      },
+    });
   } catch (err) {
     console.error("[reserve] erreur :", err);
-    return res.status(500).json({ ok: false, error: "Erreur serveur" });
+    return res.status(500).json({
+      ok: false,
+      error:
+        "Un souci technique empêche l'enregistrement. Écrivez-nous à contact@instants-reflexo.be.",
+    });
   }
 }

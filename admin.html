@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Agenda — Instants Réflexo</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%233f5443'/%3E%3Cpath d='M50 22 C 66 34 70 52 50 78 C 30 52 34 34 50 22 Z' fill='%23f6f1e7'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --cream: #f6f1e7; --cream-3: #e7dcc6; --white: #fdfbf6;
+      --ink: #2b3327; --forest: #3f5443; --forest-deep: #2e4034;
+      --sage: #8a9b82; --terra: #c17a54;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: clamp(1rem, 4vw, 2.5rem);
+      background: var(--cream); color: var(--ink);
+      font-family: "Outfit", "Helvetica Neue", Arial, sans-serif; line-height: 1.6;
+    }
+    .wrap { max-width: 60rem; margin: 0 auto; }
+    header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
+    h1 { font-family: Georgia, serif; font-weight: 500; font-size: clamp(1.5rem, 4vw, 2rem); color: var(--forest-deep); margin: 0; }
+    h2 { font-family: Georgia, serif; font-weight: 500; font-size: 1.25rem; color: var(--forest-deep); margin: 0 0 1rem; }
+    .eyebrow { font-size: .7rem; letter-spacing: .16em; text-transform: uppercase; color: var(--sage); margin: 0; }
+
+    section { background: var(--white); border-radius: var(--radius); padding: clamp(1.1rem, 3vw, 1.75rem); margin-bottom: 1.5rem; box-shadow: 0 18px 50px -30px rgba(43,51,39,.35); }
+
+    button, input, select { font: inherit; }
+    button {
+      cursor: pointer; border: 0; border-radius: 999px; padding: .55rem 1.2rem;
+      background: var(--forest); color: var(--cream); font-weight: 500;
+    }
+    button:hover:not(:disabled) { background: var(--forest-deep); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.ghost { background: transparent; color: var(--terra); border: 1.5px solid var(--cream-3); }
+    button.ghost:hover:not(:disabled) { background: var(--cream); color: var(--terra); }
+    input, select { padding: .55rem .9rem; border: 1.5px solid var(--cream-3); border-radius: 12px; background: var(--white); }
+
+    .day { border-top: 1px solid var(--cream-3); padding-top: 1rem; margin-top: 1rem; }
+    .day:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+    .day h3 { font-size: .95rem; font-weight: 600; color: var(--forest); margin: 0 0 .6rem; text-transform: capitalize; }
+
+    .rdv { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .7rem .9rem; background: var(--cream); border-radius: 12px; margin-bottom: .5rem; }
+    .rdv.cancelled { opacity: .5; }
+    .rdv.cancelled .who { text-decoration: line-through; }
+    .rdv .slot { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--forest); min-width: 6.5rem; }
+    .rdv .who { font-weight: 500; }
+    .rdv .meta { font-size: .82rem; color: var(--sage); flex: 1 1 12rem; }
+    .rdv .tag { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--terra); }
+    .rdv .msg { flex: 1 1 100%; font-size: .85rem; color: rgba(43,51,39,.7); font-style: italic; }
+    .rdv button { padding: .35rem .9rem; font-size: .82rem; }
+
+    .blocked-list { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+    .blocked-list li { display: flex; align-items: center; gap: .5rem; background: var(--cream); border-radius: 999px; padding: .35rem .5rem .35rem 1rem; font-size: .88rem; }
+    .blocked-list button { padding: .2rem .7rem; font-size: .78rem; }
+
+    .row { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; }
+    .feed { display: flex; gap: .6rem; align-items: center; margin-top: .8rem; }
+    .feed code { flex: 1 1 20rem; overflow-x: auto; white-space: nowrap; background: var(--cream); padding: .6rem .9rem; border-radius: 12px; font-size: .8rem; }
+
+    .muted { color: var(--sage); font-size: .9rem; }
+    .msg-box { padding: .8rem 1.1rem; border-radius: 12px; margin-bottom: 1rem; font-size: .9rem; }
+    .msg-box.err { background: #fbe9e2; color: #8c3d1c; }
+    .msg-box.ok { background: #eaf0e6; color: var(--forest-deep); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="eyebrow">Instants Réflexo</p>
+      <h1>Agenda</h1>
+    </div>
+    <button type="button" id="refresh" class="ghost" hidden>Actualiser</button>
+  </header>
+
+  <p id="message" class="msg-box" hidden role="status"></p>
+
+  <!-- ===== Connexion ===== -->
+  <section id="login">
+    <h2>Accès</h2>
+    <p class="muted">Collez votre jeton d'administration. Enregistrez ensuite la page dans vos favoris&nbsp;: le jeton est retenu pour cette session.</p>
+    <form class="row" id="login-form" style="margin-top:1rem;">
+      <input type="password" id="token" autocomplete="current-password" placeholder="Jeton d'administration" required style="flex:1 1 18rem;">
+      <button type="submit">Ouvrir l'agenda</button>
+    </form>
+  </section>
+
+  <!-- ===== Rendez-vous ===== -->
+  <section id="bookings" hidden>
+    <h2>Rendez-vous</h2>
+    <div id="bookings-list"></div>
+  </section>
+
+  <!-- ===== Congés ===== -->
+  <section id="blocked" hidden>
+    <h2>Jours de congé</h2>
+    <p class="muted">Un vendredi bloqué disparaît des dates proposées à la réservation.</p>
+    <ul class="blocked-list" id="blocked-list"></ul>
+    <form class="row" id="block-form">
+      <select id="block-date" required></select>
+      <input type="text" id="block-reason" placeholder="Motif (facultatif)" maxlength="200" style="flex:1 1 12rem;">
+      <button type="submit">Bloquer ce vendredi</button>
+    </form>
+  </section>
+
+  <!-- ===== Flux calendrier ===== -->
+  <section id="feed-section" hidden>
+    <h2>Calendrier à synchroniser</h2>
+    <p class="muted">Abonnez-vous à cette adresse depuis Google&nbsp;Agenda, Apple&nbsp;Calendrier ou Outlook&nbsp;: vos rendez-vous s'y ajoutent et s'y mettent à jour tout seuls. Ne la partagez pas&nbsp;: elle donne accès aux coordonnées de vos clients.</p>
+    <div class="feed">
+      <code id="feed-url"></code>
+      <button type="button" id="copy-feed" class="ghost">Copier</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const message = $("message");
+
+  let token = "";
+  let data = null;
+
+  /* Le jeton peut arriver dans le fragment d'URL (#jeton) : pratique pour un
+     favori. On le retire aussitôt de la barre d'adresse — un fragment n'est
+     jamais envoyé au serveur, mais il traîne à l'écran et dans l'historique. */
+  function readToken() {
+    const fromHash = location.hash.slice(1);
+    if (fromHash) {
+      history.replaceState(null, "", location.pathname);
+      return decodeURIComponent(fromHash);
+    }
+    return sessionStorage.getItem("ir-admin-token") || "";
+  }
+
+  function say(text, kind) {
+    message.textContent = text;
+    message.className = "msg-box " + (kind || "ok");
+    message.hidden = !text;
+  }
+
+  async function api(options) {
+    const res = await fetch("/api/admin", {
+      ...options,
+      headers: {
+        Authorization: "Bearer " + token,
+        ...(options && options.body ? { "Content-Type": "application/json" } : {}),
+      },
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload || !payload.ok) {
+      const err = new Error((payload && payload.error) || "Erreur " + res.status);
+      err.status = res.status;
+      throw err;
+    }
+    return payload;
+  }
+
+  function fmtDate(iso) {
+    return new Intl.DateTimeFormat("fr-BE", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Brussels",
+    }).format(new Date(iso + "T12:00:00Z"));
+  }
+
+  /* ---------- Rendus ---------- */
+  function renderBookings() {
+    const list = $("bookings-list");
+    list.innerHTML = "";
+
+    const live = data.bookings.filter((b) => b.status !== "cancelled");
+    if (!live.length) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.textContent = "Aucun rendez-vous pour le moment.";
+      list.appendChild(p);
+      return;
+    }
+
+    const byDate = new Map();
+    for (const b of data.bookings) {
+      if (!byDate.has(b.booking_date)) byDate.set(b.booking_date, []);
+      byDate.get(b.booking_date).push(b);
+    }
+
+    for (const [date, items] of byDate) {
+      if (!items.some((b) => b.status !== "cancelled")) continue;
+
+      const day = document.createElement("div");
+      day.className = "day";
+      const h3 = document.createElement("h3");
+      h3.textContent = items[0].dateLabel || fmtDate(date);
+      day.appendChild(h3);
+
+      for (const b of items) {
+        if (b.status === "cancelled") continue;
+        const row = document.createElement("div");
+        row.className = "rdv";
+
+        const slot = document.createElement("span");
+        slot.className = "slot";
+        slot.textContent = b.slotLabel;
+
+        const who = document.createElement("span");
+        who.className = "who";
+        who.textContent = b.name;
+
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = b.typeLabel + " · " + b.price + " €";
+
+        const meta = document.createElement("span");
+        meta.className = "meta";
+        meta.textContent = b.email + (b.phone ? " · " + b.phone : "");
+
+        const cancel = document.createElement("button");
+        cancel.className = "ghost";
+        cancel.textContent = "Annuler";
+        cancel.addEventListener("click", async () => {
+          if (!confirm(`Annuler le rendez-vous de ${b.name} (${b.slotLabel}) ?\n\nUn e-mail de notification sera envoyé.`)) return;
+          cancel.disabled = true;
+          try {
+            await api({ method: "POST", body: JSON.stringify({ action: "cancel", id: b.id }) });
+            say("Rendez-vous annulé, le créneau est de nouveau libre.", "ok");
+            await refresh();
+          } catch (err) {
+            say(err.message, "err");
+            cancel.disabled = false;
+          }
+        });
+
+        row.append(slot, who, tag, meta, cancel);
+
+        if (b.message) {
+          const msg = document.createElement("span");
+          msg.className = "msg";
+          msg.textContent = "« " + b.message + " »";
+          row.appendChild(msg);
+        }
+        day.appendChild(row);
+      }
+      list.appendChild(day);
+    }
+  }
+
+  function renderBlocked() {
+    const list = $("blocked-list");
+    list.innerHTML = "";
+
+    if (!data.blocked.length) {
+      const li = document.createElement("li");
+      li.className = "muted";
+      li.style.background = "transparent";
+      li.style.padding = "0";
+      li.textContent = "Aucun congé enregistré.";
+      list.appendChild(li);
+    }
+
+    for (const item of data.blocked) {
+      const li = document.createElement("li");
+      li.append(fmtDate(item.blocked_date) + (item.reason ? " — " + item.reason : ""));
+      const btn = document.createElement("button");
+      btn.className = "ghost";
+      btn.textContent = "Rouvrir";
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await api({ method: "POST", body: JSON.stringify({ action: "unblock", date: item.blocked_date }) });
+          say("Journée rouverte à la réservation.", "ok");
+          await refresh();
+        } catch (err) {
+          say(err.message, "err");
+          btn.disabled = false;
+        }
+      });
+      li.appendChild(btn);
+      list.appendChild(li);
+    }
+
+    const select = $("block-date");
+    select.innerHTML = "";
+    const blockedSet = new Set(data.blocked.map((b) => b.blocked_date));
+    for (const date of data.fridays) {
+      if (blockedSet.has(date)) continue;
+      const opt = document.createElement("option");
+      opt.value = date;
+      opt.textContent = fmtDate(date);
+      select.appendChild(opt);
+    }
+    $("block-form").querySelector("button").disabled = select.options.length === 0;
+  }
+
+  function renderFeed() {
+    $("feed-url").textContent = data.calendarURL;
+  }
+
+  /* ---------- Flux ---------- */
+  async function refresh() {
+    data = await api({ method: "GET" });
+    renderBookings();
+    renderBlocked();
+    renderFeed();
+  }
+
+  async function open(candidate) {
+    token = candidate;
+    try {
+      await refresh();
+      sessionStorage.setItem("ir-admin-token", token);
+      $("login").hidden = true;
+      ["bookings", "blocked", "feed-section", "refresh"].forEach((id) => ($(id).hidden = false));
+      say("", "ok");
+    } catch (err) {
+      token = "";
+      sessionStorage.removeItem("ir-admin-token");
+      say(err.status === 401 ? "Jeton refusé." : err.message, "err");
+      $("login").hidden = false;
+    }
+  }
+
+  $("login-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const value = $("token").value.trim();
+    if (value) open(value);
+  });
+
+  $("refresh").addEventListener("click", () =>
+    refresh().catch((err) => say(err.message, "err"))
+  );
+
+  $("block-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const date = $("block-date").value;
+    const reason = $("block-reason").value.trim();
+    try {
+      await api({ method: "POST", body: JSON.stringify({ action: "block", date, reason }) });
+      $("block-reason").value = "";
+      say("Journée bloquée : elle n'est plus proposée à la réservation.", "ok");
+      await refresh();
+    } catch (err) {
+      say(err.message, "err");
+    }
+  });
+
+  $("copy-feed").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(data.calendarURL);
+      say("Adresse du calendrier copiée.", "ok");
+    } catch {
+      say("Copie impossible — sélectionnez l'adresse à la main.", "err");
+    }
+  });
+
+  const saved = readToken();
+  if (saved) open(saved);
+})();
+</script>
+</body>
+</html>

@@ -14,19 +14,26 @@
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
+  function closeMenu() {
+    navLinks.classList.remove("is-open");
+    burger.classList.remove("is-open");
+    burger.setAttribute("aria-expanded", "false");
+    document.body.style.overflow = "";
+  }
+
   burger.addEventListener("click", () => {
     const open = navLinks.classList.toggle("is-open");
     burger.classList.toggle("is-open", open);
     burger.setAttribute("aria-expanded", String(open));
     document.body.style.overflow = open ? "hidden" : "";
   });
-  navLinks.querySelectorAll("a").forEach((a) =>
-    a.addEventListener("click", () => {
-      navLinks.classList.remove("is-open");
-      burger.classList.remove("is-open");
-      document.body.style.overflow = "";
-    })
-  );
+  navLinks.querySelectorAll("a").forEach((a) => a.addEventListener("click", closeMenu));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && navLinks.classList.contains("is-open")) {
+      closeMenu();
+      burger.focus();
+    }
+  });
 
   /* ---------- Apparition au scroll ---------- */
   const io = new IntersectionObserver(
@@ -47,25 +54,17 @@
 
   /* ============================================================
      Réservation
+
+     Les créneaux, les tarifs et les disponibilités viennent tous de
+     /api/availability. Le navigateur n'en détient plus aucune copie :
+     il ne peut donc ni proposer un créneau déjà pris, ni se tromper de
+     tarif, ni dériver du serveur.
      ============================================================ */
-  const SLOTS = [
-    { id: "09:30", label: "9h30 – 10h30", perso: false },
-    { id: "10:30", label: "10h30 – 11h30", perso: true },
-    { id: "14:00", label: "14h00 – 15h00", perso: false },
-    { id: "15:00", label: "15h00 – 16h00", perso: false },
-    { id: "16:00", label: "16h00 – 17h00", perso: true },
-  ];
-
-  const TYPES = {
-    classique: { label: "Classique", price: 65 },
-    personnalisee: { label: "Personnalisée", price: 85 },
-  };
-
-  const state = { type: "classique", date: null, slot: null };
 
   const typeChoice = document.getElementById("type-choice");
   const datePills = document.getElementById("date-pills");
   const slotGrid = document.getElementById("slot-grid");
+  const slotHint = document.getElementById("slot-hint");
   const sumType = document.getElementById("sum-type");
   const sumDate = document.getElementById("sum-date");
   const sumSlot = document.getElementById("sum-slot");
@@ -74,54 +73,111 @@
   const submitBtn = document.getElementById("submit-btn");
   const successPanel = document.getElementById("booking-success");
   const successRecap = document.getElementById("success-recap");
+  const successNote = document.getElementById("success-note");
 
-  const fmtLong = new Intl.DateTimeFormat("fr-BE", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  const fmtShort = new Intl.DateTimeFormat("fr-BE", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+  const CONTACT = "contact@instants-reflexo.be";
 
-  /* Les 8 prochains vendredis */
-  function nextFridays(count) {
-    const out = [];
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    // vendredi = 5 ; si on est vendredi, on propose à partir du suivant
-    const delta = ((5 - d.getDay() + 7) % 7) || 7;
-    d.setDate(d.getDate() + delta);
-    for (let i = 0; i < count; i++) {
-      out.push(new Date(d));
-      d.setDate(d.getDate() + 7);
-    }
-    return out;
+  /** Réponse de /api/availability. */
+  let data = null;
+  const state = { type: "classique", date: null, slot: null };
+
+  const dayByDate = (date) => data?.days.find((d) => d.date === date) ?? null;
+  const slotDef = (id) => data?.slots.find((s) => s.id === id) ?? null;
+  const typeDef = (id) => data?.types.find((t) => t.id === id) ?? null;
+
+  /** Un créneau est réservable si le serveur le dit et s'il accepte ce type. */
+  function isBookable(date, slotId, type) {
+    const day = dayByDate(date);
+    if (!day) return false;
+    const slot = day.slots.find((s) => s.id === slotId);
+    if (!slot?.available) return false;
+    if (type === "personnalisee" && !slotDef(slotId)?.perso) return false;
+    return true;
   }
 
-  const fridays = nextFridays(8);
+  /** Cette journée propose-t-elle encore quelque chose pour ce type de séance ? */
+  function dayOpen(day, type) {
+    return day.available && day.slots.some((s) => isBookable(day.date, s.id, type));
+  }
 
-  function isoDate(d) {
-    return d.toISOString().slice(0, 10);
+  /* ---------- Chargement ---------- */
+  async function loadAvailability() {
+    const res = await fetch("/api/availability", { headers: { Accept: "application/json" } });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload?.ok) {
+      throw new Error(payload?.error || `HTTP ${res.status}`);
+    }
+    data = payload;
+
+    // Une date ou un créneau devenus indisponibles entre-temps sont oubliés.
+    if (state.date && !dayByDate(state.date)) state.date = null;
+    if (state.date && !dayOpen(dayByDate(state.date), state.type)) state.date = null;
+    if (state.slot && (!state.date || !isBookable(state.date, state.slot, state.type))) {
+      state.slot = null;
+    }
+    if (!state.date) {
+      state.date = data.days.find((d) => dayOpen(d, state.type))?.date ?? null;
+    }
+  }
+
+  function showUnavailable(message) {
+    datePills.innerHTML = "";
+    slotGrid.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "booking__offline";
+    p.setAttribute("role", "status");
+    p.append(message + " ");
+    const link = document.createElement("a");
+    link.href = "mailto:" + CONTACT;
+    link.textContent = "Écrivez-nous à " + CONTACT;
+    p.appendChild(link);
+    p.append(", nous fixerons votre rendez-vous ensemble.");
+    datePills.appendChild(p);
+    submitBtn.disabled = true;
+    slotHint.hidden = true;
   }
 
   /* ---------- Rendus ---------- */
+  function renderTypes() {
+    typeChoice.querySelectorAll(".type-card").forEach((card) => {
+      const def = typeDef(card.dataset.type);
+      const active = card.dataset.type === state.type;
+      card.classList.toggle("is-active", active);
+      card.setAttribute("aria-pressed", String(active));
+      if (def) {
+        const price = card.querySelector(".type-card__price");
+        const desc = card.querySelector(".type-card__desc");
+        if (price) price.textContent = `${def.price} €`;
+        if (desc) desc.textContent = def.desc;
+      }
+    });
+  }
+
   function renderDates() {
     datePills.innerHTML = "";
-    fridays.forEach((d) => {
+    data.days.forEach((day) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "date-pill";
-      btn.textContent = fmtShort.format(d);
-      btn.dataset.date = isoDate(d);
-      if (state.date === isoDate(d)) btn.classList.add("is-active");
+      btn.textContent = day.shortLabel;
+      btn.dataset.date = day.date;
+
+      const open = dayOpen(day, state.type);
+      btn.disabled = !open;
+      if (!open) {
+        btn.title = day.blocked
+          ? "Patricia n'est pas disponible ce jour-là"
+          : "Plus de créneau libre pour cette séance";
+      }
+
+      const active = state.date === day.date;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", String(active));
+
       btn.addEventListener("click", () => {
-        state.date = isoDate(d);
-        renderDates();
-        updateSummary();
+        state.date = day.date;
+        if (state.slot && !isBookable(day.date, state.slot, state.type)) state.slot = null;
+        render();
       });
       datePills.appendChild(btn);
     });
@@ -129,57 +185,99 @@
 
   function renderSlots() {
     slotGrid.innerHTML = "";
-    SLOTS.forEach((s) => {
+    const day = dayByDate(state.date);
+
+    data.slots.forEach((slot) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "slot-btn";
-      btn.innerHTML = s.label + (s.perso ? ' <span class="star">✦</span>' : "");
-      btn.disabled = state.type === "personnalisee" && !s.perso;
-      if (state.slot === s.id && !btn.disabled) btn.classList.add("is-active");
+      btn.append(slot.label);
+      if (slot.perso) {
+        const star = document.createElement("span");
+        star.className = "star";
+        star.setAttribute("aria-hidden", "true");
+        star.textContent = " ✦";
+        btn.appendChild(star);
+      }
+
+      const bookable = day ? isBookable(day.date, slot.id, state.type) : false;
+      btn.disabled = !bookable;
+
+      if (!day) {
+        btn.title = "Choisissez d'abord un vendredi";
+      } else if (!bookable) {
+        const info = day.slots.find((s) => s.id === slot.id);
+        if (state.type === "personnalisee" && !slot.perso) {
+          btn.title = "La séance personnalisée n'est proposée qu'à 10h30 et 16h00";
+        } else if (info?.reason === "taken") {
+          btn.title = "Déjà réservé";
+        } else if (info?.reason === "too-soon") {
+          btn.title = `Trop proche — réservation ${data.minNoticeHours} h à l'avance minimum`;
+        } else {
+          btn.title = "Indisponible";
+        }
+      }
+
+      const active = state.slot === slot.id && bookable;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", String(active));
+
       btn.addEventListener("click", () => {
-        state.slot = s.id;
-        renderSlots();
-        updateSummary();
+        state.slot = slot.id;
+        render();
       });
       slotGrid.appendChild(btn);
     });
   }
 
   function updateSummary() {
-    const t = TYPES[state.type];
-    sumType.textContent = `${t.label} — ${t.price} €`;
-    sumDate.textContent = state.date
-      ? fmtLong.format(new Date(state.date + "T00:00:00"))
-      : "—";
-    const slot = SLOTS.find((s) => s.id === state.slot);
-    sumSlot.textContent = slot ? slot.label : "—";
+    const t = typeDef(state.type);
+    sumType.textContent = t ? `${t.label} — ${t.price} €` : "—";
+    sumDate.textContent = dayByDate(state.date)?.label ?? "—";
+    sumSlot.textContent = slotDef(state.slot)?.label ?? "—";
   }
 
-  function setType(type) {
-    state.type = type;
-    // un créneau incompatible est réinitialisé
-    const slot = SLOTS.find((s) => s.id === state.slot);
-    if (type === "personnalisee" && slot && !slot.perso) state.slot = null;
-    typeChoice.querySelectorAll(".type-card").forEach((c) =>
-      c.classList.toggle("is-active", c.dataset.type === type)
-    );
+  function render() {
+    renderTypes();
+    renderDates();
     renderSlots();
     updateSummary();
   }
 
+  function setType(type) {
+    if (!typeDef(type)) return;
+    state.type = type;
+    if (state.date && state.slot && !isBookable(state.date, state.slot, type)) state.slot = null;
+    // Le vendredi choisi peut ne plus rien proposer pour ce type de séance.
+    if (!state.date || !dayOpen(dayByDate(state.date), type)) {
+      state.date = data.days.find((d) => dayOpen(d, type))?.date ?? null;
+      state.slot = null;
+    }
+    render();
+  }
+
   typeChoice.querySelectorAll(".type-card").forEach((card) =>
-    card.addEventListener("click", () => setType(card.dataset.type))
+    card.addEventListener("click", () => {
+      if (data) setType(card.dataset.type);
+    })
   );
 
-  /* Boutons "Réserver" des cartes tarifs pré-sélectionnent le type */
+  /* Les boutons « Réserver » des cartes tarifs présélectionnent le type. */
   document.querySelectorAll("[data-select-type]").forEach((a) =>
-    a.addEventListener("click", () => setType(a.dataset.selectType))
+    a.addEventListener("click", () => {
+      if (data) setType(a.dataset.selectType);
+    })
   );
 
   /* ---------- Envoi ---------- */
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     formError.hidden = true;
+
+    if (!data) {
+      showError(`Le module de réservation n'a pas pu se charger. Écrivez-nous à ${CONTACT}.`);
+      return;
+    }
 
     const name = document.getElementById("f-name").value.trim();
     const email = document.getElementById("f-email").value.trim();
@@ -200,21 +298,6 @@
       return;
     }
 
-    const t = TYPES[state.type];
-    const slot = SLOTS.find((s) => s.id === state.slot);
-    const payload = {
-      type: t.label,
-      price: t.price,
-      date: state.date,
-      dateLabel: fmtLong.format(new Date(state.date + "T00:00:00")),
-      slot: slot.label,
-      name,
-      email,
-      phone,
-      message,
-      website: honeypot,
-    };
-
     submitBtn.disabled = true;
     submitBtn.textContent = "Envoi en cours…";
 
@@ -222,16 +305,40 @@
       const res = await fetch("/api/reserve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          type: state.type,
+          date: state.date,
+          slot: state.slot,
+          name,
+          email,
+          phone,
+          message,
+          website: honeypot,
+        }),
       });
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      const payload = await res.json().catch(() => null);
+
+      if (res.status === 409) {
+        // Quelqu'un a pris le créneau entre l'affichage et l'envoi : on
+        // recharge les disponibilités pour montrer l'état réel de l'agenda.
+        await loadAvailability().catch(() => {});
+        if (data) render();
+        showError(payload?.error || "Ce créneau vient d'être réservé. Merci d'en choisir un autre.");
+        return;
+      }
+      if (!res.ok || !payload?.ok) {
+        showError(payload?.error || `Un souci technique empêche l'envoi. Écrivez-nous à ${CONTACT}.`);
+        return;
+      }
+
       showSuccess(payload);
     } catch (err) {
-      showError(
-        "Un souci technique empêche l'envoi. Vous pouvez nous écrire directement à contact@instants-reflexo.be."
-      );
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Confirmer ma demande";
+      showError(`Un souci technique empêche l'envoi. Écrivez-nous à ${CONTACT}.`);
+    } finally {
+      if (successPanel.hidden) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Confirmer ma réservation";
+      }
     }
   });
 
@@ -240,14 +347,35 @@
     formError.hidden = false;
   }
 
-  function showSuccess(p) {
-    successRecap.textContent = `${p.name}, votre demande de séance ${p.type.toLowerCase()} du ${p.dateLabel} (${p.slot}) a bien été transmise à Patricia.`;
+  function showSuccess(payload) {
+    const b = payload.booking;
+    successRecap.textContent =
+      `${b.name}, votre séance ${b.type.toLowerCase()} du ${b.dateLabel} (${b.slot}) est confirmée. ` +
+      `Le paiement de ${b.price} € se fait sur place.`;
+
+    // Si l'e-mail n'est pas parti, on le dit. La réservation, elle, est bien
+    // enregistrée : c'est la base qui fait foi, pas la messagerie.
+    successNote.textContent = payload.emailed
+      ? "Un e-mail de confirmation vient de vous être envoyé, avec le rendez-vous à ajouter à votre agenda. À très bientôt."
+      : `Votre rendez-vous est bien enregistré, mais l'e-mail de confirmation n'a pas pu partir. Merci de nous écrire à ${CONTACT} pour que nous vous confirmions tout ça.`;
+    successNote.classList.toggle("is-warning", !payload.emailed);
+
     successPanel.hidden = false;
+    successPanel.focus();
     successPanel.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   /* ---------- Init ---------- */
-  renderDates();
-  renderSlots();
-  updateSummary();
+  loadAvailability()
+    .then(() => {
+      if (!data.days.some((d) => d.available)) {
+        showUnavailable("Aucun créneau n'est libre dans les prochaines semaines.");
+        return;
+      }
+      render();
+    })
+    .catch((err) => {
+      console.error("[réservation] disponibilités indisponibles :", err);
+      showUnavailable("La réservation en ligne est momentanément indisponible.");
+    });
 })();
