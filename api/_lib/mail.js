@@ -10,8 +10,19 @@
  * La réservation reste enregistrée en base — c'est elle qui fait foi.
  */
 
-import { CONTACT_EMAIL, PLACE, TYPES, longLabel, siteURL, slotInstants } from "./config.js";
+import { CONTACT_EMAIL, PLACE, TYPES, dateParts, longLabel, siteURL, slotInstants } from "./config.js";
 import { buildICS, LOCATION } from "./ics.js";
+import {
+  COLORS,
+  button,
+  dateBanner,
+  detailRow,
+  detailsTable,
+  escapeHTML,
+  mapsURL,
+  precautionsBox,
+  shell,
+} from "./email-template.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -74,58 +85,6 @@ function recapText(b) {
   ].join("\n");
 }
 
-function escapeHTML(value) {
-  return String(value ?? "").replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
-  );
-}
-
-function clientHTML(b, cancelURL) {
-  const type = TYPES[b.session_type];
-  return `<!doctype html>
-<html lang="fr"><body style="margin:0;padding:0;background:#f6f1e7;font-family:'Helvetica Neue',Arial,sans-serif;color:#2b3327;">
-  <div style="max-width:540px;margin:0 auto;padding:32px 24px;">
-    <p style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#8a9b82;margin:0 0 24px;">Instants Réflexo</p>
-    <h1 style="font-size:24px;font-weight:500;margin:0 0 16px;color:#2e4034;">Votre rendez-vous est confirmé</h1>
-    <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
-      Bonjour ${escapeHTML(b.name)},<br>
-      votre séance est réservée. Vous trouverez le rendez-vous en pièce jointe, à ajouter à votre agenda.
-    </p>
-    <table style="width:100%;border-collapse:collapse;background:#fdfbf6;border-radius:12px;">
-      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Séance</td>
-          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;">${escapeHTML(type.label)} — ${type.price} €</td></tr>
-      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Date</td>
-          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;">${escapeHTML(longLabel(b.booking_date))}</td></tr>
-      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Créneau</td>
-          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;">${escapeHTML(b.slot_label)}</td></tr>
-      <tr><td style="padding:14px 18px;font-size:14px;color:#8a9b82;">Lieu</td>
-          <td style="padding:14px 18px;font-size:14px;text-align:right;">${escapeHTML(PLACE.name)}<br>${escapeHTML(PLACE.street)}, ${escapeHTML(PLACE.postalCode)} ${escapeHTML(PLACE.city)}</td></tr>
-    </table>
-    <p style="font-size:14px;line-height:1.6;margin:24px 0 0;color:#5a6553;">
-      Le paiement se fait sur place. Un empêchement&nbsp;?
-      <a href="${escapeHTML(cancelURL)}" style="color:#c17a54;">Annulez votre rendez-vous</a> —
-      cela libère le créneau pour quelqu'un d'autre.
-    </p>
-    <div style="margin:20px 0 0;padding:14px 18px;background:#fbf3ec;border-left:3px solid #c17a54;border-radius:12px;">
-      <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#2e4034;">Merci de reporter la séance si&nbsp;:</p>
-      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;color:#5a6553;">
-        <li>vous avez une prise de sang dans les 15 jours qui viennent&nbsp;;</li>
-        <li>vous êtes enceinte de moins de trois mois&nbsp;;</li>
-        <li>vous avez été opéré·e il y a moins d'un mois, ou une opération est prévue.</li>
-      </ul>
-      <p style="margin:8px 0 0;font-size:13px;color:#5a6553;">
-        Dans ces cas, <a href="${escapeHTML(cancelURL)}" style="color:#c17a54;">annulez</a> et
-        écrivez-nous&nbsp;: nous trouverons une autre date.
-      </p>
-    </div>
-    <p style="font-size:13px;line-height:1.6;margin:28px 0 0;color:#8a9b82;border-top:1px solid #e7dcc6;padding-top:20px;">
-      Instants Réflexo — Patricia Valck · ${escapeHTML(CONTACT_EMAIL)}<br>
-      La réflexologie plantaire ne se substitue pas à un avis ou un traitement médical.
-    </p>
-  </div>
-</body></html>`;
-}
 
 function cancelURLFor(booking) {
   return `${siteURL()}/api/cancel?token=${encodeURIComponent(booking.cancel_token)}`;
@@ -167,6 +126,49 @@ function icsAttachment(booking) {
   };
 }
 
+/** Adresse en HTML, cliquable vers la carte. */
+function addressBlock() {
+  return `<a href="${mapsURL()}" style="color:${COLORS.ink};text-decoration:none;">
+    ${escapeHTML(PLACE.name)}<br>
+    <span style="color:${COLORS.sage};">${escapeHTML(PLACE.street)}, ${escapeHTML(PLACE.postalCode)} ${escapeHTML(PLACE.city)}</span>
+    <span style="color:${COLORS.terra};font-size:13px;"> &nbsp;Voir le plan &rsaquo;</span></a>`;
+}
+
+/** Corps de l'e-mail de confirmation. */
+function confirmationHTML(booking, cancelURL) {
+  const type = TYPES[booking.session_type];
+  const { weekday, dayMonth } = dateParts(booking.booking_date);
+
+  return shell({
+    preheader: `${weekday} ${dayMonth} à ${booking.slot_label} — ${PLACE.name}, ${PLACE.city}`,
+    heading: "Votre rendez-vous est confirmé",
+    intro: `Bonjour ${escapeHTML(booking.name)}, votre séance est réservée.
+            Le rendez-vous est en pièce jointe, à ajouter à votre agenda d'un clic.`,
+    body: `
+      ${dateBanner({ weekday, dayMonth, time: booking.slot_label })}
+
+      <div style="height:26px;line-height:26px;">&nbsp;</div>
+
+      ${detailsTable([
+        detailRow("Séance", escapeHTML(type.label)),
+        detailRow("Tarif", `<strong style="font-size:16px;">${type.price} €</strong>
+          <span style="color:${COLORS.sage};font-size:13px;"> à régler sur place</span>`),
+        detailRow("Lieu", addressBlock(), { last: true }),
+      ])}
+
+      <div style="height:26px;line-height:26px;">&nbsp;</div>
+      ${precautionsBox()}
+      <div style="height:24px;line-height:24px;">&nbsp;</div>
+
+      ${button(cancelURL, "Annuler mon rendez-vous", { subtle: true })}
+
+      <div style="padding-top:14px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+                  font-size:12.5px;line-height:1.6;color:${COLORS.sage};text-align:center;">
+        Un empêchement&nbsp;? Annulez librement, cela libère le créneau pour quelqu'un d'autre.
+      </div>`,
+  });
+}
+
 /**
  * Envoie les deux e-mails. Ne lève jamais : renvoie l'état de chaque envoi
  * pour que l'appelant décide quoi montrer à l'utilisateur.
@@ -189,7 +191,7 @@ export async function sendBookingEmails(booking) {
     to: [booking.email],
     reply_to: recipient(),
     subject: `Votre rendez-vous du ${dateLabel} — Instants Réflexo`,
-    html: clientHTML(booking, cancelURL),
+    html: confirmationHTML(booking, cancelURL),
     text: [
       `Bonjour ${booking.name},`,
       ``,
@@ -213,6 +215,45 @@ export async function sendBookingEmails(booking) {
   return { practitioner, client };
 }
 
+/** Corps de l'e-mail de déplacement. */
+function moveHTML(booking, previous, cancelURL) {
+  const type = TYPES[booking.session_type];
+  const { weekday, dayMonth } = dateParts(booking.booking_date);
+  const old = dateParts(previous.booking_date);
+
+  return shell({
+    preheader: `Nouvelle date : ${weekday} ${dayMonth} à ${booking.slot_label}`,
+    heading: "Votre rendez-vous a été déplacé",
+    intro: `Bonjour ${escapeHTML(booking.name)}, Patricia a dû déplacer votre séance.
+            La pièce jointe met à jour votre agenda&nbsp;: l'ancienne date en disparaît d'elle-même.`,
+    body: `
+      <div style="text-align:center;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+                  font-size:14px;color:${COLORS.sage};text-decoration:line-through;padding-bottom:12px;">
+        ${escapeHTML(old.weekday)} ${escapeHTML(old.dayMonth)} — ${escapeHTML(previous.slot_label)}
+      </div>
+
+      ${dateBanner({ weekday, dayMonth, time: booking.slot_label })}
+
+      <div style="height:26px;line-height:26px;">&nbsp;</div>
+
+      ${detailsTable([
+        detailRow("Séance", escapeHTML(type.label)),
+        detailRow("Tarif", `<strong style="font-size:16px;">${type.price} €</strong>
+          <span style="color:${COLORS.sage};font-size:13px;"> à régler sur place</span>`),
+        detailRow("Lieu", addressBlock(), { last: true }),
+      ])}
+
+      <div style="height:26px;line-height:26px;">&nbsp;</div>
+
+      ${button(cancelURL, "Cette date ne me convient pas", { subtle: true })}
+
+      <div style="padding-top:14px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+                  font-size:12.5px;line-height:1.6;color:${COLORS.sage};text-align:center;">
+        Vous pouvez aussi simplement répondre à cet e-mail.
+      </div>`,
+  });
+}
+
 /**
  * Informe le client que Patricia a déplacé son rendez-vous.
  *
@@ -230,35 +271,7 @@ export async function sendMoveEmail(booking, previous) {
     to: [booking.email],
     reply_to: recipient(),
     subject: `Votre rendez-vous est déplacé au ${newLabel} — Instants Réflexo`,
-    html: `<!doctype html>
-<html lang="fr"><body style="margin:0;padding:0;background:#f6f1e7;font-family:'Helvetica Neue',Arial,sans-serif;color:#2b3327;">
-  <div style="max-width:540px;margin:0 auto;padding:32px 24px;">
-    <p style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#8a9b82;margin:0 0 24px;">Instants Réflexo</p>
-    <h1 style="font-size:24px;font-weight:500;margin:0 0 16px;color:#2e4034;">Votre rendez-vous a été déplacé</h1>
-    <p style="font-size:15px;line-height:1.6;margin:0 0 24px;">
-      Bonjour ${escapeHTML(booking.name)},<br>
-      Patricia a dû déplacer votre séance. La pièce jointe met à jour le rendez-vous
-      dans votre agenda — l'ancienne date en disparaît d'elle-même.
-    </p>
-    <table style="width:100%;border-collapse:collapse;background:#fdfbf6;border-radius:12px;">
-      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Ancienne date</td>
-          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;text-decoration:line-through;color:#8a9b82;">${escapeHTML(oldLabel)}</td></tr>
-      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Nouvelle date</td>
-          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;font-weight:600;color:#2e4034;">${escapeHTML(newLabel)}</td></tr>
-      <tr><td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;color:#8a9b82;">Créneau</td>
-          <td style="padding:14px 18px;border-bottom:1px solid #e7dcc6;font-size:14px;text-align:right;font-weight:600;">${escapeHTML(booking.slot_label)}</td></tr>
-      <tr><td style="padding:14px 18px;font-size:14px;color:#8a9b82;">Séance</td>
-          <td style="padding:14px 18px;font-size:14px;text-align:right;">${escapeHTML(type.label)} — ${type.price} €</td></tr>
-    </table>
-    <p style="font-size:14px;line-height:1.6;margin:24px 0 0;color:#5a6553;">
-      Cette nouvelle date ne vous convient pas&nbsp;? Répondez simplement à cet e-mail,
-      ou <a href="${escapeHTML(cancelURL)}" style="color:#c17a54;">annulez le rendez-vous</a>.
-    </p>
-    <p style="font-size:13px;line-height:1.6;margin:28px 0 0;color:#8a9b82;border-top:1px solid #e7dcc6;padding-top:20px;">
-      Instants Réflexo — Patricia Valck · ${escapeHTML(CONTACT_EMAIL)}
-    </p>
-  </div>
-</body></html>`,
+    html: moveHTML(booking, previous, cancelURL),
     text: [
       `Bonjour ${booking.name},`,
       ``,
@@ -277,6 +290,67 @@ export async function sendMoveEmail(booking, previous) {
       `— Instants Réflexo, Patricia Valck`,
     ].join("\n"),
     attachments: [icsAttachment(booking)],
+  });
+}
+
+/**
+ * Rappel de la veille, par e-mail.
+ *
+ * Utilisé quand aucun numéro de téléphone n'a été laissé — sans quoi ces
+ * rendez-vous seraient les seuls à ne recevoir aucun rappel.
+ */
+export async function sendReminderEmail(booking) {
+  const type = TYPES[booking.session_type];
+  const cancelURL = cancelURLFor(booking);
+  const { weekday, dayMonth } = dateParts(booking.booking_date);
+
+  return send({
+    from: sender(),
+    to: [booking.email],
+    reply_to: recipient(),
+    subject: `Rappel — votre séance demain à ${booking.slot_label}`,
+    html: shell({
+      preheader: `Demain ${weekday} ${dayMonth} à ${booking.slot_label}, ${PLACE.name}`,
+      heading: "C'est demain",
+      intro: `Bonjour ${escapeHTML(booking.name)}, un petit mot pour vous rappeler
+              votre séance de réflexologie plantaire.`,
+      body: `
+        ${dateBanner({ weekday: `demain, ${weekday}`, dayMonth, time: booking.slot_label })}
+
+        <div style="height:26px;line-height:26px;">&nbsp;</div>
+
+        ${detailsTable([
+          detailRow("Séance", escapeHTML(type.label)),
+          detailRow("À prévoir", `<strong>${type.price} €</strong>
+            <span style="color:${COLORS.sage};font-size:13px;"> à régler sur place</span>`),
+          detailRow("Lieu", addressBlock(), { last: true }),
+        ])}
+
+        <div style="height:26px;line-height:26px;">&nbsp;</div>
+        ${precautionsBox()}
+        <div style="height:24px;line-height:24px;">&nbsp;</div>
+
+        ${button(cancelURL, "Je ne pourrai pas venir", { subtle: true })}
+
+        <div style="padding-top:14px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+                    font-size:12.5px;line-height:1.6;color:${COLORS.sage};text-align:center;">
+          Prévenir permet à quelqu'un d'autre de prendre le créneau. À demain&nbsp;!
+        </div>`,
+    }),
+    text: [
+      `Bonjour ${booking.name},`,
+      ``,
+      `Petit rappel : votre séance de réflexologie plantaire a lieu demain,`,
+      `${weekday} ${dayMonth}, à ${booking.slot_label}.`,
+      ``,
+      `Séance : ${type.label} (${type.price} € à régler sur place)`,
+      `Lieu   : ${LOCATION}`,
+      ``,
+      `Un empêchement ? Annulez ici : ${cancelURL}`,
+      ``,
+      `À demain,`,
+      `Patricia — Instants Réflexo`,
+    ].join("\n"),
   });
 }
 

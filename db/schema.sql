@@ -8,7 +8,7 @@
 --  tout seul au premier appel suivant un déploiement (api/_lib/migrate.js).
 --  Il reste là pour relire le schéma ou repartir d'une base vierge.
 --
---  Version du schéma : 3
+--  Version du schéma : 4
 --  Le script est idempotent : le rejouer ne casse rien.
 -- ============================================================
 
@@ -45,6 +45,8 @@ create table if not exists bookings (
 
 alter table bookings add column if not exists revision integer not null default 0;
 
+alter table bookings add column if not exists reminder_sent_at timestamptz;
+
 create unique index if not exists one_booking_per_slot
   on bookings (booking_date, slot)
   where status in ('pending', 'confirmed');
@@ -55,6 +57,10 @@ create index if not exists bookings_date_idx
 
 create index if not exists bookings_cancel_token_idx
   on bookings (cancel_token);
+
+create index if not exists bookings_reminder_idx
+  on bookings (booking_date)
+  where status in ('pending', 'confirmed') and reminder_sent_at is null;
 
 create table if not exists blocked_dates (
   blocked_date date primary key,
@@ -104,6 +110,6 @@ end;
 $fn$;
 
 insert into schema_meta (key, value, updated_at)
-values ('version', '3', now())
+values ('version', '4', now())
 on conflict (key) do update
   set value = excluded.value, updated_at = now();

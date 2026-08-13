@@ -15,7 +15,7 @@
  */
 
 /** À incrémenter à chaque ajout d'instruction. Déclenche la migration. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * Verrou consultatif Postgres. Deux fonctions qui démarrent à froid en même
@@ -63,6 +63,10 @@ export const STATEMENTS = [
   // exists` ne touche pas une table existante, cet ALTER si.
   `alter table bookings add column if not exists revision integer not null default 0`,
 
+  // Horodatage du rappel de la veille. C'est lui qui garantit qu'un rendez-vous
+  // ne reçoit pas deux rappels si la tâche planifiée se rejoue.
+  `alter table bookings add column if not exists reminder_sent_at timestamptz`,
+
   // Le cœur du système anti-double-réservation. Un seul rendez-vous vivant
   // par (date, créneau) : une insertion ou un déplacement concurrent échoue
   // en 23505, que l'API traduit en 409. Les annulations libèrent le créneau.
@@ -78,6 +82,12 @@ export const STATEMENTS = [
      on bookings (cancel_token)`,
 
   /* ---------- Congés ---------- */
+  // Sélection quotidienne des rappels : les rendez-vous du lendemain qui
+  // n'en ont pas encore reçu.
+  `create index if not exists bookings_reminder_idx
+     on bookings (booking_date)
+     where status in ('pending', 'confirmed') and reminder_sent_at is null`,
+
   `create table if not exists blocked_dates (
      blocked_date date primary key,
      reason       text,
