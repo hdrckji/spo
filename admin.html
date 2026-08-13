@@ -163,14 +163,21 @@
     </form>
   </section>
 
-  <!-- ===== Test SMS ===== -->
+  <!-- ===== Vérifications ===== -->
   <section id="sms-section" hidden>
-    <h2>Vérifier les rappels SMS</h2>
-    <p class="muted">Envoie immédiatement un vrai SMS, avec le texte exact d'un rappel. Utile pour vérifier la configuration Brevo sans attendre la veille d'un rendez-vous.</p>
-    <form class="row" id="sms-form" style="margin-top:1rem;">
-      <input type="tel" id="sms-phone" class="grow" placeholder="Votre numéro, ex. 0470 11 22 33" autocomplete="tel" required>
-      <button type="submit">Envoyer un SMS de test</button>
+    <h2>Vérifier les envois</h2>
+    <p class="muted">Envoie de vrais messages, avec le contenu exact de ceux que reçoivent les clientes. En cas de refus, la raison s'affiche ici plutôt que dans les journaux.</p>
+
+    <form class="row" id="email-form" style="margin-top:1.2rem;">
+      <input type="email" id="email-to" class="grow" placeholder="Votre adresse e-mail" autocomplete="email" required>
+      <button type="submit">Envoyer l'e-mail de confirmation</button>
     </form>
+
+    <form class="row" id="sms-form" style="margin-top:.7rem;">
+      <input type="tel" id="sms-phone" class="grow" placeholder="Votre numéro, ex. 0470 11 22 33" autocomplete="tel" required>
+      <button type="submit">Envoyer le SMS de rappel</button>
+    </form>
+
     <p class="muted" id="sms-preview" hidden></p>
   </section>
 
@@ -531,6 +538,27 @@
     }
   });
 
+  $("email-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("email-form").querySelector("button");
+    btn.disabled = true;
+    btn.textContent = "Envoi…";
+    $("sms-preview").hidden = true;
+    try {
+      const r = await api({
+        method: "POST",
+        body: JSON.stringify({ action: "test-email", email: $("email-to").value }),
+      });
+      say(`E-mail envoyé à ${r.recipient}. Pensez à regarder dans les indésirables.`, "ok");
+    } catch (err) {
+      // Le message de Resend remonte tel quel : c'est lui qui dit ce qui cloche.
+      say(err.message, "err");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Envoyer l'e-mail de confirmation";
+    }
+  });
+
   $("sms-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("sms-form").querySelector("button");
@@ -551,7 +579,7 @@
       say(err.message, "err");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Envoyer un SMS de test";
+      btn.textContent = "Envoyer le SMS de rappel";
     }
   });
 

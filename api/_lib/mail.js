@@ -38,13 +38,24 @@ function sender() {
   return process.env.RESEND_FROM || `Instants Réflexo <${CONTACT_EMAIL}>`;
 }
 
-async function send(payload) {
+/**
+ * Envoi brut, avec compte rendu détaillé.
+ *
+ * Les appelants ordinaires n'ont besoin que d'un booléen — d'où `send()`
+ * juste en dessous. Mais le bouton de vérification de l'agenda doit pouvoir
+ * afficher le message de Resend, sans quoi il faut aller le chercher dans
+ * les journaux Vercel. C'est précisément ce qui a fait perdre du temps sur
+ * le domaine non vérifié.
+ *
+ * @returns {Promise<{ok: boolean, error?: string, status?: number}>}
+ */
+export async function sendDetailed(payload) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error(
       "[mail] RESEND_API_KEY absente — aucun e-mail envoyé. Configurez-la dans Vercel (voir README.md)."
     );
-    return false;
+    return { ok: false, error: "RESEND_API_KEY n'est pas configurée dans Vercel." };
   }
 
   try {
@@ -58,14 +69,44 @@ async function send(payload) {
     });
 
     if (!res.ok) {
-      console.error("[mail] échec Resend :", res.status, await res.text());
-      return false;
+      const detail = await res.text();
+      console.error("[mail] échec Resend :", res.status, detail);
+      return { ok: false, status: res.status, error: resendMessage(res.status, detail) };
     }
-    return true;
+    return { ok: true };
   } catch (err) {
     console.error("[mail] erreur réseau :", err);
-    return false;
+    return { ok: false, error: "Resend est injoignable : " + err.message };
   }
+}
+
+/** Traduit une réponse d'erreur Resend en phrase actionnable. */
+function resendMessage(status, body) {
+  let detail = body;
+  try {
+    const parsed = JSON.parse(body);
+    detail = parsed.message || parsed.error || body;
+  } catch {
+    // corps non JSON : on garde le texte brut
+  }
+  const text = String(detail);
+  let hint = "";
+  if (/domain is not verified/i.test(text)) {
+    hint =
+      " — Ajoutez et vérifiez instants-reflexo.be sur resend.com/domains, " +
+      "ou mettez temporairement RESEND_FROM à « onboarding@resend.dev » " +
+      "(qui ne peut écrire qu'à l'adresse du compte Resend).";
+  } else if (status === 401 || status === 403) {
+    hint = " — la clé API est refusée ou n'a pas le droit d'envoyer.";
+  } else if (status === 422) {
+    hint = " — Resend refuse un champ, souvent l'expéditeur ou le destinataire.";
+  }
+  return `Resend a répondu ${status} : ${text.slice(0, 300)}${hint}`;
+}
+
+/** Même envoi, réduit à un booléen pour les appelants qui n'en demandent pas plus. */
+async function send(payload) {
+  return (await sendDetailed(payload)).ok;
 }
 
 function recapText(b) {
@@ -351,6 +392,37 @@ export async function sendReminderEmail(booking) {
       `À demain,`,
       `Patricia — Instants Réflexo`,
     ].join("\n"),
+  });
+}
+
+/**
+ * E-mail de vérification : la confirmation réelle, adressée où l'on veut.
+ *
+ * Permet de contrôler la configuration Resend — clé, domaine vérifié,
+ * expéditeur autorisé — et de voir la mise en page dans sa propre messagerie,
+ * sans créer de réservation pour autant.
+ */
+export async function sendTestEmail(to, sampleDate) {
+  const booking = {
+    id: "00000000-0000-0000-0000-000000000000",
+    booking_date: sampleDate,
+    slot: "10:30",
+    slot_label: "10h30 – 11h30",
+    session_type: "classique",
+    name: "Test",
+    email: to,
+    cancel_token: "verification-sans-effet",
+    revision: 0,
+  };
+
+  return sendDetailed({
+    from: sender(),
+    to: [to],
+    reply_to: recipient(),
+    subject: "Test — aperçu de l'e-mail de confirmation",
+    html: confirmationHTML(booking, cancelURLFor(booking)),
+    text: "Envoi de vérification. La mise en page est visible dans la version HTML du message.",
+    attachments: [icsAttachment(booking)],
   });
 }
 

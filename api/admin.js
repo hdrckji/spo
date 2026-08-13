@@ -19,7 +19,7 @@ import {
 } from "./_lib/throttle.js";
 import { isConfigured, isSlotTaken, sql } from "./_lib/db.js";
 import { getAvailability, validateRequest } from "./_lib/availability.js";
-import { sendCancellationEmail, sendMoveEmail } from "./_lib/mail.js";
+import { isValidEmail, sendCancellationEmail, sendMoveEmail, sendTestEmail } from "./_lib/mail.js";
 import { normalizePhone, sendSMS } from "./_lib/sms.js";
 import { reminderSMS } from "./_lib/reminder.js";
 import { ensureSchema } from "./_lib/migrate.js";
@@ -211,6 +211,7 @@ async function act(body, res) {
 
   if (action === "move") return await move(body, res);
   if (action === "test-sms") return await testSMS(body, res);
+  if (action === "test-email") return await testEmail(body, res);
 
   return res.status(400).json({ ok: false, error: "Action inconnue." });
 }
@@ -253,6 +254,26 @@ async function testSMS(body, res) {
     length: sample.length,
     preview: sample,
   });
+}
+
+/**
+ * Envoie l'e-mail de confirmation réel à une adresse choisie, sans créer de
+ * réservation. Le message de Resend remonte à l'écran en cas de refus —
+ * domaine non vérifié, clé rejetée, expéditeur non autorisé.
+ */
+async function testEmail(body, res) {
+  const to = String(body.email || "").trim();
+  if (!isValidEmail(to)) {
+    return res.status(400).json({ ok: false, error: "Indiquez une adresse e-mail valide." });
+  }
+
+  const [nextFriday] = nextFridays(1);
+  const result = await sendTestEmail(to, nextFriday);
+
+  if (!result.ok) {
+    return res.status(502).json({ ok: false, error: result.error });
+  }
+  return res.status(200).json({ ok: true, recipient: to });
 }
 
 /**
