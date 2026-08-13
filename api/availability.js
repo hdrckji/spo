@@ -8,6 +8,7 @@
 
 import { getAvailability } from "./_lib/availability.js";
 import { isConfigured } from "./_lib/db.js";
+import { ensureSchema } from "./_lib/migrate.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -27,6 +28,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Porte le schéma à niveau si le déploiement en a changé la forme.
+    // Sans effet et sans requête une fois la fonction chaude.
+    await ensureSchema();
+
     const data = await getAvailability();
     return res.status(200).json({ ok: true, ...data });
   } catch (err) {

@@ -3,14 +3,30 @@
  *
  * Authentification par jeton porteur (ADMIN_TOKEN), transmis par admin.html.
  *
- * GET   → rendez-vous à venir, dates bloquées, URL du flux ICS
- * POST  → { action: "block" | "unblock" | "cancel", … }
+ * GET   → rendez-vous à venir, disponibilités, dates bloquées, flux ICS
+ * POST  → { action: "block" | "unblock" | "cancel" | "move", … }
  */
 
 import { SLOT_BY_ID, TYPES, longLabel, nextFridays, siteURL } from "./_lib/config.js";
-import { calendarToken, isAdmin } from "./_lib/auth.js";
-import { isConfigured, sql } from "./_lib/db.js";
-import { sendCancellationEmail } from "./_lib/mail.js";
+import { adminTokenProblem, calendarToken, hashIP, isAdmin } from "./_lib/auth.js";
+import {
+  MAX_ADMIN_FAILURES,
+  WINDOW_MINUTES,
+  clearFailures,
+  pause,
+  recentFailures,
+  recordFailure,
+} from "./_lib/throttle.js";
+import { isConfigured, isSlotTaken, sql } from "./_lib/db.js";
+import { getAvailability, validateRequest } from "./_lib/availability.js";
+import { sendCancellationEmail, sendMoveEmail } from "./_lib/mail.js";
+import { ensureSchema } from "./_lib/migrate.js";
+
+/**
+ * L'administration n'est pas soumise au délai de prévenance : Patricia doit
+ * pouvoir déplacer un rendez-vous vers demain matin si la situation l'exige.
+ */
+const ADMIN_MIN_NOTICE_HOURS = 0;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -30,18 +46,52 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex");
 
-  if (!process.env.ADMIN_TOKEN) {
-    console.error("[admin] ADMIN_TOKEN absent — administration désactivée. Voir README.md.");
-    return res.status(503).json({ ok: false, error: "Administration non configurée." });
-  }
-
-  if (!isAdmin(req)) {
-    res.setHeader("WWW-Authenticate", 'Bearer realm="admin"');
-    return res.status(401).json({ ok: false, error: "Jeton invalide." });
+  // Un jeton serveur inutilisable n'est pas un jeton refusé : on le dit
+  // explicitement, sinon on cherche l'erreur du côté de la saisie.
+  const problem = adminTokenProblem();
+  if (problem) {
+    console.error("[admin] administration désactivée —", problem);
+    return res.status(503).json({
+      ok: false,
+      error: `Administration mal configurée sur le serveur : ${problem} Corrigez la variable dans Vercel, puis redéployez.`,
+    });
   }
 
   if (!isConfigured()) {
     return res.status(503).json({ ok: false, error: "Base de données non configurée." });
+  }
+
+  /* ---- Limitation des tentatives ----
+     C'est elle qui protège l'agenda, davantage que la longueur du jeton. Le
+     compteur se vérifie avant l'authentification, sinon il suffirait de
+     réessayer indéfiniment. */
+  const ipHash = hashIP(req);
+  try {
+    // Porte le schéma à niveau si le déploiement en a changé la forme.
+    // Sans effet et sans requête une fois la fonction chaude.
+    await ensureSchema();
+
+    if ((await recentFailures(ipHash)) >= MAX_ADMIN_FAILURES) {
+      console.warn("[admin] trop de tentatives échouées, accès bloqué temporairement");
+      res.setHeader("Retry-After", String(WINDOW_MINUTES * 60));
+      return res.status(429).json({
+        ok: false,
+        error: `Trop de tentatives échouées. Réessayez dans ${WINDOW_MINUTES} minutes.`,
+      });
+    }
+
+    if (!isAdmin(req)) {
+      await recordFailure(ipHash);
+      await pause();
+      res.setHeader("WWW-Authenticate", 'Bearer realm="admin"');
+      return res.status(401).json({ ok: false, error: "Jeton invalide." });
+    }
+
+    // Se tromper puis réussir ne doit pas laisser de trace pénalisante.
+    await clearFailures(ipHash);
+  } catch (err) {
+    console.error("[admin] erreur lors du contrôle des tentatives :", err);
+    return res.status(500).json({ ok: false, error: "Erreur serveur." });
   }
 
   try {
@@ -56,7 +106,7 @@ export default async function handler(req, res) {
 }
 
 async function list(res) {
-  const [bookings, blocked] = await Promise.all([
+  const [bookings, blocked, availability] = await Promise.all([
     sql`
       select id,
              to_char(booking_date, 'YYYY-MM-DD') as booking_date,
@@ -72,12 +122,16 @@ async function list(res) {
        where blocked_date >= current_date
        order by blocked_date
     `,
+    // Sert au sélecteur de déplacement : la page n'a ainsi jamais à deviner
+    // quels créneaux sont libres, elle lit la même source que le public.
+    getAvailability({ minNoticeHours: ADMIN_MIN_NOTICE_HOURS }),
   ]);
 
   return res.status(200).json({
     ok: true,
     calendarURL: `${siteURL()}/api/calendar?token=${calendarToken()}`,
     fridays: nextFridays(),
+    availability,
     blocked,
     bookings: bookings.map((b) => ({
       ...b,
@@ -153,5 +207,103 @@ async function act(body, res) {
     return res.status(200).json({ ok: true });
   }
 
+  if (action === "move") return await move(body, res);
+
   return res.status(400).json({ ok: false, error: "Action inconnue." });
+}
+
+/**
+ * Déplace un rendez-vous vers un autre créneau.
+ *
+ * La collision n'est pas testée avant l'écriture — elle est *empêchée* par
+ * l'index unique partiel, comme pour une réservation publique. Deux
+ * déplacements simultanés vers le même créneau ne peuvent pas passer tous
+ * les deux : le second remonte en 23505 et devient un 409.
+ */
+async function move(body, res) {
+  const id = String(body.id || "");
+  const date = String(body.date || "");
+  const slot = String(body.slot || "");
+
+  if (!ISO_DATE_RE.test(date)) {
+    return res.status(400).json({ ok: false, error: "Date invalide." });
+  }
+
+  const [current] = await sql`
+    select id,
+           to_char(booking_date, 'YYYY-MM-DD') as booking_date,
+           slot, session_type, name, email, phone, revision, cancel_token
+      from bookings
+     where id = ${id}::uuid
+       and status in ('pending', 'confirmed')
+     limit 1
+  `;
+  if (!current) {
+    return res.status(404).json({ ok: false, error: "Rendez-vous introuvable ou annulé." });
+  }
+
+  if (current.booking_date === date && current.slot === slot) {
+    return res.status(400).json({ ok: false, error: "C'est déjà le créneau actuel." });
+  }
+
+  // Mêmes règles que pour une réservation publique — notamment le fait qu'une
+  // séance personnalisée ne peut aller que sur un créneau qui l'accepte.
+  const check = await validateRequest({
+    date,
+    slot,
+    type: current.session_type,
+    minNoticeHours: ADMIN_MIN_NOTICE_HOURS,
+  });
+  if (!check.ok) {
+    return res.status(check.status).json({ ok: false, error: check.error });
+  }
+
+  let moved;
+  try {
+    [moved] = await sql`
+      update bookings
+         set booking_date = ${date}::date,
+             slot = ${slot},
+             revision = revision + 1
+       where id = ${id}::uuid
+         and status in ('pending', 'confirmed')
+      returning id,
+                to_char(booking_date, 'YYYY-MM-DD') as booking_date,
+                slot, session_type, name, email, phone, revision, cancel_token
+    `;
+  } catch (err) {
+    if (isSlotTaken(err)) {
+      return res.status(409).json({
+        ok: false,
+        code: "slot_taken",
+        error: "Ce créneau vient d'être pris. Choisissez-en un autre.",
+      });
+    }
+    throw err;
+  }
+
+  if (!moved) {
+    return res.status(404).json({ ok: false, error: "Rendez-vous introuvable ou annulé." });
+  }
+
+  let notified = true;
+  if (body.notify !== false) {
+    notified = await sendMoveEmail(
+      { ...moved, slot_label: SLOT_BY_ID.get(moved.slot)?.label ?? moved.slot },
+      { ...current, slot_label: SLOT_BY_ID.get(current.slot)?.label ?? current.slot }
+    );
+    if (!notified) {
+      console.error("[admin] rendez-vous", moved.id, "déplacé mais e-mail non envoyé");
+    }
+  }
+
+  return res.status(200).json({
+    ok: true,
+    notified,
+    booking: {
+      date: moved.booking_date,
+      dateLabel: longLabel(moved.booking_date),
+      slot: SLOT_BY_ID.get(moved.slot)?.label ?? moved.slot,
+    },
+  });
 }
