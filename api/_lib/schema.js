@@ -15,7 +15,7 @@
  */
 
 /** À incrémenter à chaque ajout d'instruction. Déclenche la migration. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Verrou consultatif Postgres. Deux fonctions qui démarrent à froid en même
@@ -95,6 +95,19 @@ export const STATEMENTS = [
   `create index if not exists reserve_attempts_lookup_idx
      on reserve_attempts (ip_hash, created_at desc)`,
 
+  /* ---------- Tentatives d'accès à l'administration ----------
+     C'est ce qui rend sûr un ADMIN_TOKEN court : au-delà de quelques échecs
+     par quart d'heure et par adresse, l'accès est refusé. Là encore, seul un
+     hachage de l'IP est conservé. */
+  `create table if not exists admin_attempts (
+     id         bigserial primary key,
+     ip_hash    text        not null,
+     created_at timestamptz not null default now()
+   )`,
+
+  `create index if not exists admin_attempts_lookup_idx
+     on admin_attempts (ip_hash, created_at desc)`,
+
   /* ---------- Purge RGPD ----------
      Appelée par le cron quotidien (api/cron/purge.js). */
   `create or replace function purge_old_data(retention_months integer default 12)
@@ -112,6 +125,9 @@ export const STATEMENTS = [
      delete from reserve_attempts
       where created_at < now() - interval '7 days';
      get diagnostics a = row_count;
+
+     delete from admin_attempts
+      where created_at < now() - interval '7 days';
 
      return query select b, a;
    end;

@@ -8,7 +8,15 @@
  */
 
 import { SLOT_BY_ID, TYPES, longLabel, nextFridays, siteURL } from "./_lib/config.js";
-import { calendarToken, isAdmin } from "./_lib/auth.js";
+import { adminTokenProblem, calendarToken, hashIP, isAdmin } from "./_lib/auth.js";
+import {
+  MAX_ADMIN_FAILURES,
+  WINDOW_MINUTES,
+  clearFailures,
+  pause,
+  recentFailures,
+  recordFailure,
+} from "./_lib/throttle.js";
 import { isConfigured, isSlotTaken, sql } from "./_lib/db.js";
 import { getAvailability, validateRequest } from "./_lib/availability.js";
 import { sendCancellationEmail, sendMoveEmail } from "./_lib/mail.js";
@@ -38,25 +46,55 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex");
 
-  if (!process.env.ADMIN_TOKEN) {
-    console.error("[admin] ADMIN_TOKEN absent — administration désactivée. Voir README.md.");
-    return res.status(503).json({ ok: false, error: "Administration non configurée." });
-  }
-
-  if (!isAdmin(req)) {
-    res.setHeader("WWW-Authenticate", 'Bearer realm="admin"');
-    return res.status(401).json({ ok: false, error: "Jeton invalide." });
+  // Un jeton serveur inutilisable n'est pas un jeton refusé : on le dit
+  // explicitement, sinon on cherche l'erreur du côté de la saisie.
+  const problem = adminTokenProblem();
+  if (problem) {
+    console.error("[admin] administration désactivée —", problem);
+    return res.status(503).json({
+      ok: false,
+      error: `Administration mal configurée sur le serveur : ${problem} Corrigez la variable dans Vercel, puis redéployez.`,
+    });
   }
 
   if (!isConfigured()) {
     return res.status(503).json({ ok: false, error: "Base de données non configurée." });
   }
 
+  /* ---- Limitation des tentatives ----
+     C'est elle qui protège l'agenda, davantage que la longueur du jeton. Le
+     compteur se vérifie avant l'authentification, sinon il suffirait de
+     réessayer indéfiniment. */
+  const ipHash = hashIP(req);
   try {
     // Porte le schéma à niveau si le déploiement en a changé la forme.
     // Sans effet et sans requête une fois la fonction chaude.
     await ensureSchema();
 
+    if ((await recentFailures(ipHash)) >= MAX_ADMIN_FAILURES) {
+      console.warn("[admin] trop de tentatives échouées, accès bloqué temporairement");
+      res.setHeader("Retry-After", String(WINDOW_MINUTES * 60));
+      return res.status(429).json({
+        ok: false,
+        error: `Trop de tentatives échouées. Réessayez dans ${WINDOW_MINUTES} minutes.`,
+      });
+    }
+
+    if (!isAdmin(req)) {
+      await recordFailure(ipHash);
+      await pause();
+      res.setHeader("WWW-Authenticate", 'Bearer realm="admin"');
+      return res.status(401).json({ ok: false, error: "Jeton invalide." });
+    }
+
+    // Se tromper puis réussir ne doit pas laisser de trace pénalisante.
+    await clearFailures(ipHash);
+  } catch (err) {
+    console.error("[admin] erreur lors du contrôle des tentatives :", err);
+    return res.status(500).json({ ok: false, error: "Erreur serveur." });
+  }
+
+  try {
     if (req.method === "GET") return await list(res);
     if (req.method === "POST") return await act(readBody(req), res);
     res.setHeader("Allow", "GET, POST");

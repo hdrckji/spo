@@ -136,7 +136,7 @@ fonctions du dossier `api/` automatiquement — il n'y a pas d'étape de build.
 | Variable | Requise | Rôle |
 |---|---|---|
 | `DATABASE_URL` | **oui** | Chaîne de connexion Neon (pooled). Sans elle, la réservation répond `503` au lieu de faire semblant de fonctionner. |
-| `ADMIN_TOKEN` | **oui** | Ouvre `/admin.html`. Sert aussi de sel au hachage des IP et à dériver le jeton du flux ICS. Minimum 24 caractères. |
+| `ADMIN_TOKEN` | **oui** | Ouvre `/admin.html`. Sert aussi de sel au hachage des IP et à dériver le jeton du flux ICS. Minimum 8 caractères — voir *Pourquoi un mot de passe court suffit*. |
 | `RESEND_API_KEY` | **oui** en production | Clé API Resend. Absente, la réservation est **quand même enregistrée** et l'utilisateur est informé que l'e-mail n'est pas parti. |
 | `RESEND_FROM` | non | Expéditeur vérifié. Défaut : `Instants Réflexo <contact@instants-reflexo.be>`. |
 | `RESERVATION_EMAIL` | non | Destinataire des notifications. Défaut : `contact@instants-reflexo.be`. |
@@ -185,6 +185,29 @@ peut déplacer un rendez-vous vers le lendemain matin si la situation l'exige.
 
 Bloquer un jour qui porte déjà des rendez-vous est refusé — il faudrait sinon
 annuler les rendez-vous d'abord, ce que l'interface demande explicitement.
+
+### Pourquoi un mot de passe court suffit
+
+`ADMIN_TOKEN` n'exige que 8 caractères, de sorte qu'un mot de passe retenable
+convienne. Ce n'est pas sa longueur qui protège l'agenda, c'est la limitation
+des tentatives : **cinq échecs par quart d'heure et par adresse IP**, puis
+refus pendant quinze minutes, avec 400 ms de délai à chaque échec.
+
+À ce rythme, parcourir les combinaisons de huit caractères prendrait un temps
+sans rapport avec la durée d'une vie. La limite s'applique par adresse, si
+bien qu'un tiers qui sature le compteur ne verrouille pas Patricia hors de
+son propre agenda. Une connexion réussie efface les échecs précédents.
+
+Ce que la limitation ne couvre pas, c'est une **fuite** du jeton — quelqu'un
+qui le lit par-dessus une épaule, ou récupère le favori. Contre cela, la
+longueur ne peut rien non plus : seul le fait de le changer protège.
+
+Un mot de passe court reste donc un choix légitime. Une phrase de passe de
+quatre mots offre une marge supplémentaire si vous la voulez, mais ce n'est
+plus une obligation technique.
+
+Pour durcir ou assouplir : `MAX_ADMIN_FAILURES` et `WINDOW_MINUTES` dans
+`api/_lib/throttle.js`, `MIN_TOKEN_LENGTH` dans `api/_lib/auth.js`.
 
 ### Le calendrier sur téléphone
 

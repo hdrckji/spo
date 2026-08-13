@@ -12,14 +12,44 @@
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-function secret() {
+/**
+ * Longueur minimale d'ADMIN_TOKEN.
+ *
+ * Volontairement basse, pour qu'un mot de passe retenable suffise. Ce n'est
+ * pas la longueur du secret qui protège l'agenda, c'est la limitation des
+ * tentatives (voir throttle.js) : cinq échecs par quart d'heure et par
+ * adresse, puis refus. À ce rythme, deviner huit caractères demanderait un
+ * temps sans commune mesure avec la durée d'une vie.
+ *
+ * Ce que la limitation ne couvre pas, c'est une *fuite* du jeton — quelqu'un
+ * qui le lit par-dessus une épaule. Contre ça, la longueur ne peut rien non
+ * plus : seul le fait de le changer protège.
+ */
+export const MIN_TOKEN_LENGTH = 8;
+
+/**
+ * Décrit ce qui cloche avec ADMIN_TOKEN, ou null si tout va bien.
+ *
+ * Sépare deux situations qu'on confondrait sinon : « le jeton du serveur est
+ * inutilisable » et « tu as saisi le mauvais jeton ». Sans cette distinction,
+ * un ADMIN_TOKEN trop court se manifeste par un simple « jeton refusé », et
+ * on cherche l'erreur du mauvais côté.
+ */
+export function adminTokenProblem() {
   const value = process.env.ADMIN_TOKEN;
-  if (!value || value.length < 24) {
-    throw new Error(
-      "ADMIN_TOKEN doit être défini et faire au moins 24 caractères. Voir README.md."
-    );
+  if (!value) {
+    return "ADMIN_TOKEN n'est pas défini dans les variables d'environnement.";
   }
-  return value;
+  if (value.length < MIN_TOKEN_LENGTH) {
+    return `ADMIN_TOKEN ne fait que ${value.length} caractères ; il en faut au moins ${MIN_TOKEN_LENGTH}.`;
+  }
+  return null;
+}
+
+function secret() {
+  const problem = adminTokenProblem();
+  if (problem) throw new Error(problem + " Voir README.md.");
+  return process.env.ADMIN_TOKEN;
 }
 
 /** Comparaison à temps constant, tolérante aux longueurs différentes. */

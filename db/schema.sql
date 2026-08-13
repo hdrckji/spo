@@ -8,7 +8,7 @@
 --  tout seul au premier appel suivant un déploiement (api/_lib/migrate.js).
 --  Il reste là pour relire le schéma ou repartir d'une base vierge.
 --
---  Version du schéma : 2
+--  Version du schéma : 3
 --  Le script est idempotent : le rejouer ne casse rien.
 -- ============================================================
 
@@ -71,6 +71,15 @@ create table if not exists reserve_attempts (
 create index if not exists reserve_attempts_lookup_idx
   on reserve_attempts (ip_hash, created_at desc);
 
+create table if not exists admin_attempts (
+  id         bigserial primary key,
+  ip_hash    text        not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists admin_attempts_lookup_idx
+  on admin_attempts (ip_hash, created_at desc);
+
 create or replace function purge_old_data(retention_months integer default 12)
 returns table (deleted_bookings bigint, deleted_attempts bigint)
 language plpgsql
@@ -87,11 +96,14 @@ begin
    where created_at < now() - interval '7 days';
   get diagnostics a = row_count;
 
+  delete from admin_attempts
+   where created_at < now() - interval '7 days';
+
   return query select b, a;
 end;
 $fn$;
 
 insert into schema_meta (key, value, updated_at)
-values ('version', '2', now())
+values ('version', '3', now())
 on conflict (key) do update
   set value = excluded.value, updated_at = now();
