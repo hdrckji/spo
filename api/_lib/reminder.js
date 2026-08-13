@@ -40,12 +40,13 @@ export async function sendReminder(booking) {
     if (segments(text) > 1) {
       console.warn(`[reminder] SMS de ${text.length} caractères (> ${GSM_LIMIT}) : plusieurs segments`);
     }
-    if (await sendSMS(booking.phone, text)) {
+    const result = await sendSMS(booking.phone, text);
+    if (result.ok) {
       return { sent: true, channel: "sms" };
     }
     // L'envoi SMS a échoué : plutôt que de laisser la cliente sans rappel,
     // on bascule sur l'e-mail, dont on a forcément l'adresse.
-    console.warn("[reminder] SMS refusé, bascule sur l'e-mail");
+    console.warn("[reminder] SMS refusé, bascule sur l'e-mail —", result.error);
   }
 
   const ok = await sendReminderEmail(booking);

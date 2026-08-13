@@ -20,6 +20,8 @@ import {
 import { isConfigured, isSlotTaken, sql } from "./_lib/db.js";
 import { getAvailability, validateRequest } from "./_lib/availability.js";
 import { sendCancellationEmail, sendMoveEmail } from "./_lib/mail.js";
+import { normalizePhone, sendSMS } from "./_lib/sms.js";
+import { reminderSMS } from "./_lib/reminder.js";
 import { ensureSchema } from "./_lib/migrate.js";
 
 /**
@@ -208,8 +210,49 @@ async function act(body, res) {
   }
 
   if (action === "move") return await move(body, res);
+  if (action === "test-sms") return await testSMS(body, res);
 
   return res.status(400).json({ ok: false, error: "Action inconnue." });
+}
+
+/**
+ * Envoie un vrai SMS de vérification, avec le texte exact d'un rappel.
+ *
+ * Sans cela, la seule façon de savoir si Brevo est bien configuré serait
+ * d'attendre la veille d'un rendez-vous — et de découvrir l'échec trop tard.
+ * En cas de refus, le message d'erreur de Brevo remonte jusqu'à l'écran.
+ */
+async function testSMS(body, res) {
+  const phone = String(body.phone || "").trim();
+  if (!phone) {
+    return res.status(400).json({ ok: false, error: "Indiquez un numéro de téléphone." });
+  }
+
+  const recipient = normalizePhone(phone);
+  if (!recipient) {
+    return res.status(400).json({
+      ok: false,
+      error: `« ${phone} » n'est pas un numéro exploitable. Exemples acceptés : 0470 11 22 33, +32 470 11 22 33.`,
+    });
+  }
+
+  // Le texte réel d'un rappel, pour le prochain vendredi : ce qui est testé
+  // est bien ce qui partira, longueur et accents compris.
+  const [nextFriday] = nextFridays(1);
+  const sample = reminderSMS({ booking_date: nextFriday, slot_label: "10h30 – 11h30" });
+
+  const result = await sendSMS(phone, sample);
+
+  if (!result.ok) {
+    return res.status(502).json({ ok: false, error: result.error, recipient });
+  }
+  return res.status(200).json({
+    ok: true,
+    recipient,
+    segments: result.segments,
+    length: sample.length,
+    preview: sample,
+  });
 }
 
 /**
