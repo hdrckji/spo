@@ -250,6 +250,23 @@ Une colonne `reminder_sent_at` empêche le double envoi. Un échec ne
 l'horodate pas : le rendez-vous sera repris au passage suivant, un rappel en
 retard valant mieux qu'aucun rappel.
 
+**Pour vérifier la configuration** sans attendre la veille d'un rendez-vous :
+la page `/admin.html` contient un encart « Vérifier les rappels SMS ». Saisir
+un numéro y envoie un vrai SMS, avec le texte exact d'un rappel. En cas de
+refus, le message d'erreur de Brevo s'affiche à l'écran plutôt que de finir
+dans les journaux — clé rejetée, crédits épuisés, expéditeur non autorisé.
+
+La tâche planifiée elle-même se déclenche à la main :
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" \
+     https://www.instants-reflexo.be/api/cron/reminders
+```
+
+Elle répond en JSON le nombre de rappels partis par SMS et par e-mail. Sans
+rendez-vous le lendemain, elle renvoie `total: 0` — ce qui vérifie déjà que
+l'endpoint et le secret sont corrects.
+
 Pour configurer Brevo : **SMS → Paramètres** pour l'expéditeur, puis
 **SMTP & API → Clés API**. Vérifiez que le compte dispose de crédits SMS, ils
 sont facturés séparément des e-mails. Comptez de 0,05 à 0,09 € par SMS vers

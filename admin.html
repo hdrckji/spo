@@ -163,6 +163,17 @@
     </form>
   </section>
 
+  <!-- ===== Test SMS ===== -->
+  <section id="sms-section" hidden>
+    <h2>Vérifier les rappels SMS</h2>
+    <p class="muted">Envoie immédiatement un vrai SMS, avec le texte exact d'un rappel. Utile pour vérifier la configuration Brevo sans attendre la veille d'un rendez-vous.</p>
+    <form class="row" id="sms-form" style="margin-top:1rem;">
+      <input type="tel" id="sms-phone" class="grow" placeholder="Votre numéro, ex. 0470 11 22 33" autocomplete="tel" required>
+      <button type="submit">Envoyer un SMS de test</button>
+    </form>
+    <p class="muted" id="sms-preview" hidden></p>
+  </section>
+
   <!-- ===== Flux calendrier ===== -->
   <section id="feed-section" hidden>
     <h2>Calendrier à synchroniser</h2>
@@ -484,7 +495,9 @@
       await refresh();
       sessionStorage.setItem("ir-admin-token", token);
       $("login").hidden = true;
-      ["bookings", "blocked", "feed-section", "refresh"].forEach((id) => ($(id).hidden = false));
+      ["bookings", "blocked", "sms-section", "feed-section", "refresh"].forEach(
+        (id) => ($(id).hidden = false)
+      );
       say("", "ok");
     } catch (err) {
       token = "";
@@ -515,6 +528,30 @@
       await refresh();
     } catch (err) {
       say(err.message, "err");
+    }
+  });
+
+  $("sms-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("sms-form").querySelector("button");
+    const preview = $("sms-preview");
+    btn.disabled = true;
+    btn.textContent = "Envoi…";
+    preview.hidden = true;
+    try {
+      const r = await api({
+        method: "POST",
+        body: JSON.stringify({ action: "test-sms", phone: $("sms-phone").value }),
+      });
+      say(`SMS envoyé au ${r.recipient}. Il devrait arriver dans quelques secondes.`, "ok");
+      preview.textContent = `Texte envoyé (${r.length} caractères, ${r.segments} segment) : « ${r.preview} »`;
+      preview.hidden = false;
+    } catch (err) {
+      // Le message de Brevo remonte tel quel : c'est lui qui dit ce qui cloche.
+      say(err.message, "err");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Envoyer un SMS de test";
     }
   });
 

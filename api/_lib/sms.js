@@ -84,24 +84,30 @@ export function isConfigured() {
 
 /**
  * Envoie un SMS. Ne lève jamais.
- * @returns {Promise<boolean>} true si Brevo a accepté le message.
+ *
+ * Renvoie un compte rendu plutôt qu'un simple booléen : en cas de refus, le
+ * message d'erreur de Brevo doit pouvoir remonter jusqu'à l'écran, sans quoi
+ * il faut aller le chercher dans les journaux Vercel.
+ *
+ * @returns {Promise<{ok: boolean, error?: string, status?: number, recipient?: string, segments?: number}>}
  */
 export async function sendSMS(phone, message) {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) {
     console.error("[sms] BREVO_API_KEY absente — aucun SMS envoyé. Voir README.md.");
-    return false;
+    return { ok: false, error: "BREVO_API_KEY n'est pas configurée dans Vercel." };
   }
 
   const recipient = normalizePhone(phone);
   if (!recipient) {
     console.error("[sms] numéro inutilisable, SMS non envoyé");
-    return false;
+    return { ok: false, error: `Numéro inutilisable : « ${phone} ».` };
   }
 
   const content = toGSM7(message);
-  if (segments(content) > 1) {
-    console.warn(`[sms] message de ${content.length} caractères : ${segments(content)} segments facturés`);
+  const count = segments(content);
+  if (count > 1) {
+    console.warn(`[sms] message de ${content.length} caractères : ${count} segments facturés`);
   }
 
   try {
@@ -121,14 +127,35 @@ export async function sendSMS(phone, message) {
     });
 
     if (!res.ok) {
-      // La réponse complète est journalisée : si Brevo refuse l'expéditeur ou
-      // le format du numéro, le message d'erreur le dit précisément.
-      console.error("[sms] échec Brevo :", res.status, await res.text());
-      return false;
+      // Si Brevo refuse l'expéditeur, le format du numéro ou le crédit,
+      // son message le dit précisément — on le fait remonter tel quel.
+      const detail = await res.text();
+      console.error("[sms] échec Brevo :", res.status, detail);
+      return { ok: false, status: res.status, error: brevoMessage(res.status, detail), recipient };
     }
-    return true;
+    return { ok: true, recipient, segments: count };
   } catch (err) {
     console.error("[sms] erreur réseau :", err);
-    return false;
+    return { ok: false, error: "Brevo est injoignable : " + err.message };
   }
+}
+
+/** Extrait le message lisible d'une réponse d'erreur Brevo. */
+function brevoMessage(status, body) {
+  let detail = body;
+  try {
+    const parsed = JSON.parse(body);
+    detail = parsed.message || parsed.error || body;
+  } catch {
+    // corps non JSON : on garde le texte brut
+  }
+  const hint =
+    status === 401
+      ? " — la clé API est refusée."
+      : status === 402
+        ? " — crédits SMS épuisés sur le compte Brevo."
+        : status === 400
+          ? " — Brevo refuse un champ : souvent le nom d'expéditeur ou le numéro."
+          : "";
+  return `Brevo a répondu ${status} : ${String(detail).slice(0, 300)}${hint}`;
 }
