@@ -40,13 +40,17 @@ api/
   calendar.js       GET  — flux iCalendar à synchroniser
   admin.js          GET/POST — rendez-vous, congés
   cron/purge.js     GET  — purge RGPD quotidienne
+  cron/reminders.js GET  — rappels de la veille (SMS, e-mail à défaut)
   _lib/
     config.js       créneaux, tarifs, lieu, calculs de dates
     availability.js composition des disponibilités + revalidation
     schema.js       schéma — source unique de vérité
     migrate.js      mise à niveau automatique du schéma
     db.js           client Neon
-    mail.js         envois Resend (praticienne + client)
+    mail.js         envois Resend (praticienne + cliente)
+    email-template.js gabarit HTML commun aux e-mails
+    sms.js          envoi Brevo, numéros et alphabet GSM-7
+    reminder.js     rappel de la veille : SMS, e-mail à défaut
     ics.js          génération iCalendar
     auth.js         jetons et hachage d'IP
 ```
@@ -141,7 +145,10 @@ fonctions du dossier `api/` automatiquement — il n'y a pas d'étape de build.
 | `RESEND_FROM` | non | Expéditeur vérifié. Défaut : `Instants Réflexo <contact@instants-reflexo.be>`. |
 | `RESERVATION_EMAIL` | non | Destinataire des notifications. Défaut : `contact@instants-reflexo.be`. |
 | `SITE_URL` | recommandée | URL publique, pour les liens d'annulation. Défaut : l'URL du déploiement Vercel. |
-| `CRON_SECRET` | non | Protège `/api/cron/purge`. Sans elle, la purge refuse de s'exécuter. |
+| `CRON_SECRET` | non | Protège `/api/cron/purge` et `/api/cron/reminders`. Sans elle, les deux refusent de s'exécuter. |
+| `BREVO_API_KEY` | non | Clé API Brevo pour les rappels par SMS. Absente, le rappel part par e-mail. |
+| `BREVO_SMS_SENDER` | non | Nom d'expéditeur affiché sur le SMS, **11 caractères maximum**. Défaut : `InstantsRfx`. |
+| `SMS_COUNTRY_CODE` | non | Indicatif appliqué aux numéros nationaux. Défaut : `32` (Belgique). |
 | `RETENTION_MONTHS` | non | Durée de conservation des réservations. Défaut : `12`. |
 
 Aucune variable n'a de valeur de repli silencieuse : quand il en manque une,
@@ -219,6 +226,38 @@ fournisseur particulier.
 Le jeton de cette adresse est dérivé d'`ADMIN_TOKEN` par HMAC : la partager
 ne donne aucun accès à l'administration. Elle expose en revanche les
 coordonnées des clients — elle reste donc privée.
+
+### Les messages envoyés aux clientes
+
+Trois e-mails, tous bâtis sur le même gabarit (`api/_lib/email-template.js`) :
+confirmation à la réservation, avis de déplacement, et rappel de la veille
+quand aucun numéro n'a été laissé. Le gabarit est en tableaux et styles en
+ligne — Outlook ignore `flex` et `grid`, et la plupart des messageries
+retirent les balises `<style>`.
+
+**Le rappel de la veille** part chaque jour à 16h00 UTC, soit 18h00 à
+Bruxelles en été et 17h00 en hiver. Par SMS lorsqu'un numéro est disponible,
+par e-mail sinon — le téléphone étant facultatif à la réservation, s'en tenir
+au SMS priverait de rappel une partie des clientes.
+
+Le texte du SMS est **écrit sans accent**, et ce n'est pas un oubli : un seul
+caractère hors alphabet GSM-7 fait basculer le message entier en Unicode, où
+un SMS ne compte plus que 70 caractères au lieu de 160. Le rappel accentué
+partirait en trois segments facturés au lieu d'un. `toGSM7()` retire les
+accents de toute façon, mais le message est rédigé tel qu'il partira.
+
+Une colonne `reminder_sent_at` empêche le double envoi. Un échec ne
+l'horodate pas : le rendez-vous sera repris au passage suivant, un rappel en
+retard valant mieux qu'aucun rappel.
+
+Pour configurer Brevo : **SMS → Paramètres** pour l'expéditeur, puis
+**SMTP & API → Clés API**. Vérifiez que le compte dispose de crédits SMS, ils
+sont facturés séparément des e-mails. Comptez de 0,05 à 0,09 € par SMS vers
+la Belgique — environ 1 à 2 € par mois au rythme actuel.
+
+> Le projet déclare désormais **deux tâches planifiées** (purge et rappels).
+> C'est la limite du plan Hobby de Vercel ; en ajouter une troisième demande
+> de passer au plan supérieur.
 
 ### Faire évoluer le schéma
 

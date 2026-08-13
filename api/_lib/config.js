@@ -179,3 +179,21 @@ export function longLabel(isoDate) {
 export function shortLabel(isoDate) {
   return SHORT_DATE.format(brusselsToUTC(isoDate, "12:00"));
 }
+
+const WEEKDAY = new Intl.DateTimeFormat("fr-BE", { timeZone: TIMEZONE, weekday: "long" });
+const DAY_MONTH = new Intl.DateTimeFormat("fr-BE", {
+  timeZone: TIMEZONE,
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+/**
+ * Date éclatée en deux morceaux, pour les mises en page où le jour de la
+ * semaine et la date tiennent sur des lignes distinctes.
+ * « vendredi » + « 21 août 2026 »
+ */
+export function dateParts(isoDate) {
+  const instant = brusselsToUTC(isoDate, "12:00");
+  return { weekday: WEEKDAY.format(instant), dayMonth: DAY_MONTH.format(instant) };
+}
