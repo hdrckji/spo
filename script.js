@@ -77,6 +77,20 @@
 
   const CONTACT = "contact@instants-reflexo.be";
 
+  const LETTER = /\p{L}/u;
+
+  /**
+   * Le nom *et* le prénom sont exigés — deux parties séparées d'un blanc,
+   * chacune portant au moins une lettre.
+   *
+   * Ce contrôle double celui de /api/reserve, qui reste l'autorité : ici il
+   * ne sert qu'à répondre tout de suite plutôt qu'après un aller-retour.
+   * Comme pour l'adresse e-mail, la règle est donc écrite aux deux endroits.
+   */
+  function hasFullName(value) {
+    return value.split(/\s+/).filter((part) => LETTER.test(part)).length >= 2;
+  }
+
   /** Réponse de /api/availability. */
   let data = null;
   const state = { type: "classique", date: null, slot: null };
@@ -291,6 +305,11 @@
     }
     if (!name || !email) {
       showError("Merci d'indiquer votre nom et votre adresse e-mail.");
+      return;
+    }
+    if (!hasFullName(name)) {
+      showError("Merci d'indiquer votre nom et votre prénom, pas seulement l'un des deux.");
+      document.getElementById("f-name").focus();
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

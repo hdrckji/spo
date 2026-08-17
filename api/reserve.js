@@ -26,6 +26,25 @@ function clean(value, max) {
   return String(value ?? "").trim().slice(0, max);
 }
 
+const LETTER = /\p{L}/u;
+
+/**
+ * Le nom *et* le prénom sont exigés.
+ *
+ * Le formulaire n'a qu'un seul champ — plus simple à remplir qu'une paire, et
+ * `autocomplete="name"` le préremplit. C'est donc ici qu'il faut vérifier
+ * qu'il porte bien les deux : le contrôle de non-vide laissait passer
+ * « Marie », et Patricia recevait un rendez-vous qu'elle ne pouvait rattacher
+ * à personne.
+ *
+ * Volontairement tolérant sur la forme : deux parties séparées d'un blanc,
+ * chacune contenant au moins une lettre. « Li Na », « Marie J. » et
+ * « Anne-Sophie Van der Berg » passent ; « Marie » et « M. » non.
+ */
+function hasFullName(value) {
+  return String(value).split(/\s+/).filter((part) => LETTER.test(part)).length >= 2;
+}
+
 function readBody(req) {
   if (!req.body) return {};
   if (typeof req.body === "string") {
@@ -64,13 +83,21 @@ export default async function handler(req, res) {
   const date = clean(body.date, 10);
   const slot = clean(body.slot, 5);
   const type = clean(body.type, 20);
-  const name = clean(body.name, MAX.name);
+  // Les blancs multiples sont ramenés à un seul : « Marie   Dupont » ne doit
+  // pas ressortir tel quel dans l'e-mail ni dans l'agenda.
+  const name = clean(body.name, MAX.name).replace(/\s+/g, " ");
   const email = clean(body.email, MAX.email).toLowerCase();
   const phone = clean(body.phone, MAX.phone);
   const message = clean(body.message, MAX.message);
 
   if (!name || !email) {
     return res.status(400).json({ ok: false, error: "Nom et adresse e-mail sont requis." });
+  }
+  if (!hasFullName(name)) {
+    return res.status(400).json({
+      ok: false,
+      error: "Merci d'indiquer votre nom et votre prénom.",
+    });
   }
   if (!isValidEmail(email)) {
     return res.status(400).json({ ok: false, error: "L'adresse e-mail semble invalide." });
