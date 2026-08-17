@@ -10,7 +10,7 @@ export const TIMEZONE = "Europe/Brussels";
 
 export const PLACE = {
   name: "Centre Petite Fontaine",
-  street: "Petite Place 7",
+  street: "Petite Place 6",
   postalCode: "7600",
   city: "Péruwelz",
   country: "Belgique",
