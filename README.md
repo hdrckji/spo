@@ -145,7 +145,7 @@ fonctions du dossier `api/` automatiquement — il n'y a pas d'étape de build.
 | `RESEND_FROM` | non | Expéditeur vérifié. Défaut : `Instants Réflexo <contact@instants-reflexo.be>`. |
 | `RESERVATION_EMAIL` | non | Destinataire des notifications. Défaut : `contact@instants-reflexo.be`. |
 | `SITE_URL` | recommandée | URL publique, pour les liens d'annulation. Défaut : l'URL du déploiement Vercel. |
-| `CRON_SECRET` | non | Protège `/api/cron/purge` et `/api/cron/reminders`. Sans elle, les deux refusent de s'exécuter. |
+| `CRON_SECRET` | **oui** pour les tâches planifiées | Protège `/api/cron/purge` et `/api/cron/reminders`. Sans elle, les deux répondent `503` et refusent de s'exécuter : ni purge RGPD, ni rappel de la veille. Le reste du site fonctionne. |
 | `BREVO_API_KEY` | non | Clé API Brevo pour les rappels par SMS. Absente, le rappel part par e-mail. |
 | `BREVO_SMS_SENDER` | non | Nom d'expéditeur affiché sur le SMS, **11 caractères maximum**. Défaut : `InstantsRfx`. |
 | `SMS_COUNTRY_CODE` | non | Indicatif appliqué aux numéros nationaux. Défaut : `32` (Belgique). |
@@ -187,8 +187,16 @@ L'e-mail envoyé au client porte un `.ics` de même UID que l'original, avec un
 **mettent donc à jour** le rendez-vous existant au lieu d'en ajouter un
 second à côté de l'ancien.
 
-L'administration n'est pas soumise au délai de prévenance de 24 h : Patricia
-peut déplacer un rendez-vous vers le lendemain matin si la situation l'exige.
+L'administration n'est pas soumise au délai de prévenance de 24 h : elle peut
+déplacer un rendez-vous vers un créneau imminent — jusqu'au lendemain matin
+lorsque le lendemain est un vendredi.
+
+La destination reste en revanche l'un des vendredis proposés à la réservation,
+ceux que renvoie `nextFridays()`. Deux conséquences à connaître : un
+déplacement vers un autre jour de la semaine est impossible, et le vendredi en
+cours ne l'est pas non plus — `nextFridays()` commence au vendredi suivant.
+Un vendredi, l'agenda du jour n'est donc plus modifiable ; les rendez-vous qui
+y figurent restent bien sûr affichés et annulables.
 
 Bloquer un jour qui porte déjà des rendez-vous est refusé — il faudrait sinon
 annuler les rendez-vous d'abord, ce que l'interface demande explicitement.
