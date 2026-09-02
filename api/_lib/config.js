@@ -98,12 +98,19 @@ function toISO(date) {
 }
 
 /**
- * Les `count` prochains vendredis à partir d'aujourd'hui (exclus si on est
- * déjà vendredi : on propose alors le vendredi suivant).
+ * Les `count` prochains vendredis à partir d'aujourd'hui.
+ *
+ * Le jour même est exclu par défaut, même si l'on est vendredi : au public,
+ * le délai de prévenance de 24 h rendrait de toute façon chaque créneau du
+ * jour « trop proche ». L'administration passe `includeToday: true` —
+ * Patricia doit pouvoir déplacer un rendez-vous vers un créneau plus tard
+ * le jour même ; les créneaux déjà entamés sont ensuite écartés par le
+ * délai de prévenance, créneau par créneau et non journée par journée.
  */
-export function nextFridays(count = WEEKS_AHEAD, fromISO = todayISO()) {
+export function nextFridays(count = WEEKS_AHEAD, { fromISO = todayISO(), includeToday = false } = {}) {
   const cursor = civil(fromISO);
-  const delta = ((5 - cursor.getUTCDay() + 7) % 7) || 7;
+  let delta = (5 - cursor.getUTCDay() + 7) % 7;
+  if (delta === 0 && !includeToday) delta = 7; // vendredi : jour même écarté
   cursor.setUTCDate(cursor.getUTCDate() + delta);
 
   const out = [];

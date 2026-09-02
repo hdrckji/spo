@@ -25,10 +25,13 @@ import { reminderSMS } from "./_lib/reminder.js";
 import { ensureSchema } from "./_lib/migrate.js";
 
 /**
- * L'administration n'est pas soumise au délai de prévenance : Patricia doit
- * pouvoir déplacer un rendez-vous vers demain matin si la situation l'exige.
+ * L'administration n'est pas soumise au délai de prévenance, et le vendredi
+ * en cours lui reste proposé : Patricia doit pouvoir déplacer un rendez-vous
+ * vers demain matin — ou vers un créneau plus tard le jour même, quand une
+ * cliente demande le matin à passer l'après-midi. Seuls les créneaux déjà
+ * entamés sont écartés, un à un, par le délai de zéro heure.
  */
-const ADMIN_MIN_NOTICE_HOURS = 0;
+const ADMIN_BOOKING_RULES = { minNoticeHours: 0, includeToday: true };
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -126,7 +129,7 @@ async function list(res) {
     `,
     // Sert au sélecteur de déplacement : la page n'a ainsi jamais à deviner
     // quels créneaux sont libres, elle lit la même source que le public.
-    getAvailability({ minNoticeHours: ADMIN_MIN_NOTICE_HOURS }),
+    getAvailability(ADMIN_BOOKING_RULES),
   ]);
 
   return res.status(200).json({
@@ -316,7 +319,7 @@ async function move(body, res) {
     date,
     slot,
     type: current.session_type,
-    minNoticeHours: ADMIN_MIN_NOTICE_HOURS,
+    ...ADMIN_BOOKING_RULES,
   });
   if (!check.ok) {
     return res.status(check.status).json({ ok: false, error: check.error });

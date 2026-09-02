@@ -14,6 +14,7 @@ import {
   MIN_NOTICE_HOURS,
   SLOTS,
   TYPES,
+  WEEKS_AHEAD,
   longLabel,
   nextFridays,
   shortLabel,
@@ -26,10 +27,17 @@ import { sql } from "./db.js";
  * @param {number}  [options.minNoticeHours] délai de prévenance. Le public est
  *   soumis à MIN_NOTICE_HOURS ; l'administration passe 0, Patricia devant
  *   pouvoir déplacer un rendez-vous vers demain matin si nécessaire.
+ * @param {boolean} [options.includeToday] proposer aussi le vendredi en cours.
+ *   Faux pour le public — le délai de prévenance rendrait chaque créneau du
+ *   jour « trop proche » — vrai pour l'administration, qui doit pouvoir
+ *   déplacer un rendez-vous vers un créneau plus tard le jour même.
  * @returns {Promise<{types: object, slots: Array, days: Array}>}
  */
-export async function getAvailability({ minNoticeHours = MIN_NOTICE_HOURS } = {}) {
-  const dates = nextFridays();
+export async function getAvailability({
+  minNoticeHours = MIN_NOTICE_HOURS,
+  includeToday = false,
+} = {}) {
+  const dates = nextFridays(WEEKS_AHEAD, { includeToday });
   const first = dates[0];
   const last = dates[dates.length - 1];
 
@@ -97,11 +105,18 @@ export async function getAvailability({ minNoticeHours = MIN_NOTICE_HOURS } = {}
  *
  * Les mêmes règles s'appliquent au public et à l'administration — type de
  * séance compatible avec le créneau, date proposée, journée non bloquée —
- * à l'exception du délai de prévenance, que l'administration ignore.
+ * à l'exception du délai de prévenance et de l'exclusion du jour même,
+ * que l'administration ignore.
  *
  * @returns {{ok: true} | {ok: false, status: number, error: string}}
  */
-export async function validateRequest({ date, slot, type, minNoticeHours = MIN_NOTICE_HOURS }) {
+export async function validateRequest({
+  date,
+  slot,
+  type,
+  minNoticeHours = MIN_NOTICE_HOURS,
+  includeToday = false,
+}) {
   if (!TYPES[type]) {
     return { ok: false, status: 400, error: "Type de séance inconnu." };
   }
@@ -116,7 +131,7 @@ export async function validateRequest({ date, slot, type, minNoticeHours = MIN_N
       error: "La séance personnalisée n'est proposée qu'à 10h30 et 16h00.",
     };
   }
-  if (!nextFridays().includes(date)) {
+  if (!nextFridays(WEEKS_AHEAD, { includeToday }).includes(date)) {
     return { ok: false, status: 400, error: "Cette date n'est pas proposée à la réservation." };
   }
 
@@ -125,7 +140,9 @@ export async function validateRequest({ date, slot, type, minNoticeHours = MIN_N
     return {
       ok: false,
       status: 409,
-      error: `Les réservations se font au moins ${minNoticeHours} heures à l'avance.`,
+      error: minNoticeHours
+        ? `Les réservations se font au moins ${minNoticeHours} heures à l'avance.`
+        : "Ce créneau est déjà entamé.",
     };
   }
 

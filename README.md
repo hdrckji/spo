@@ -187,8 +187,11 @@ L'e-mail envoyé au client porte un `.ics` de même UID que l'original, avec un
 **mettent donc à jour** le rendez-vous existant au lieu d'en ajouter un
 second à côté de l'ancien.
 
-L'administration n'est pas soumise au délai de prévenance de 24 h : Patricia
-peut déplacer un rendez-vous vers le lendemain matin si la situation l'exige.
+L'administration n'est pas soumise au délai de prévenance de 24 h, et le
+vendredi en cours lui reste proposé : Patricia peut déplacer un rendez-vous
+vers le lendemain matin, ou vers un créneau plus tard le jour même — seuls
+les créneaux déjà entamés sont écartés. Le public, lui, ne voit jamais le
+jour même.
 
 Bloquer un jour qui porte déjà des rendez-vous est refusé — il faudrait sinon
 annuler les rendez-vous d'abord, ce que l'interface demande explicitement.
