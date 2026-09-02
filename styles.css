@@ -138,12 +138,28 @@ p + p { margin-top: 1rem; }
   align-items: center;
   justify-content: space-between;
   padding: 1.1rem var(--pad-x);
-  transition: background 0.4s, box-shadow 0.4s, padding 0.4s;
+  transition: box-shadow 0.4s, padding 0.4s;
 }
-.nav.is-scrolled {
+
+/* Le voile flouté du défilement vit dans un pseudo-élément, jamais sur .nav
+   elle-même : un backdrop-filter fait de l'élément le bloc conteneur de ses
+   descendants en position fixe. Posé sur .nav, le menu mobile fermé
+   (inset: 0 + translateY(-100%)) se dimensionnait sur la barre au lieu de
+   l'écran dès qu'on défilait, et sa colonne de liens débordait au milieu
+   de la page. */
+.nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: rgba(246, 241, 231, 0.88);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.nav.is-scrolled::before { opacity: 1; }
+.nav.is-scrolled {
   box-shadow: 0 1px 0 rgba(43, 51, 39, 0.08);
   padding-block: 0.75rem;
 }
@@ -1010,10 +1026,19 @@ p + p { margin-top: 1rem; }
     gap: 2.2rem;
     background: var(--cream);
     transform: translateY(-100%);
-    transition: transform 0.5s var(--ease-out);
+    /* Fermé, le menu est aussi retiré du rendu et de l'ordre de tabulation —
+       sans quoi ses liens hors écran restent focusables au clavier. La
+       bascule attend la fin de la glissade (0.5 s) à la fermeture, et se
+       fait immédiatement à l'ouverture. */
+    visibility: hidden;
+    transition: transform 0.5s var(--ease-out), visibility 0s 0.5s;
     z-index: 105;
   }
-  .nav__links.is-open { transform: translateY(0); }
+  .nav__links.is-open {
+    transform: translateY(0);
+    visibility: visible;
+    transition: transform 0.5s var(--ease-out), visibility 0s;
+  }
   .nav__links a:not(.btn) {
     font-size: 1.3rem;
     padding: 0.4rem 1rem;   /* 44px de haut dans le menu plein écran */
