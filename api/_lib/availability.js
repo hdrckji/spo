@@ -128,7 +128,7 @@ export async function validateRequest({
     return {
       ok: false,
       status: 400,
-      error: "La séance personnalisée n'est proposée qu'à 10h30 et 16h00.",
+      error: "La séance personnalisée n'est proposée qu'à 11h00 et 16h00.",
     };
   }
   if (!nextFridays(WEEKS_AHEAD, { includeToday }).includes(date)) {

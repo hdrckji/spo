@@ -406,8 +406,8 @@ export async function sendTestEmail(to, sampleDate) {
   const booking = {
     id: "00000000-0000-0000-0000-000000000000",
     booking_date: sampleDate,
-    slot: "10:30",
-    slot_label: "10h30 – 11h30",
+    slot: "11:00",
+    slot_label: "11h00 – 12h30",
     session_type: "classique",
     name: "Test",
     email: to,

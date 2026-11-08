@@ -30,7 +30,7 @@ export function siteURL() {
 }
 
 /** Durée d'une séance, en minutes. */
-export const SESSION_MINUTES = 60;
+export const SESSION_MINUTES = 90;
 
 /** Nombre de vendredis proposés à la réservation. */
 export const WEEKS_AHEAD = 8;
@@ -46,22 +46,22 @@ export const TYPES = {
     id: "classique",
     label: "Classique",
     price: 60,
-    desc: "Réflexologie plantaire — 1h",
+    desc: "Réflexologie plantaire — 1h30",
   },
   personnalisee: {
     id: "personnalisee",
     label: "Personnalisée",
     price: 80,
-    desc: "Moxa & Psio — 10h30 ou 16h",
+    desc: "Moxa & Psio — 11h ou 16h",
   },
 };
 
 export const SLOTS = [
-  { id: "09:30", label: "9h30 – 10h30", perso: false },
-  { id: "10:30", label: "10h30 – 11h30", perso: true },
-  { id: "14:00", label: "14h00 – 15h00", perso: false },
-  { id: "15:00", label: "15h00 – 16h00", perso: false },
-  { id: "16:00", label: "16h00 – 17h00", perso: true },
+  { id: "09:30", label: "9h30 – 11h00", perso: false },
+  { id: "11:00", label: "11h00 – 12h30", perso: true },
+  { id: "13:00", label: "13h00 – 14h30", perso: false },
+  { id: "14:30", label: "14h30 – 16h00", perso: false },
+  { id: "16:00", label: "16h00 – 17h30", perso: true },
 ];
 
 export const SLOT_BY_ID = new Map(SLOTS.map((s) => [s.id, s]));
@@ -127,7 +127,7 @@ export function nextFridays(count = WEEKS_AHEAD, { fromISO = todayISO(), include
  * On formate un instant candidat dans le fuseau cible pour en déduire le
  * décalage réel (été/hiver), puis on l'inverse. Ambigu uniquement pendant
  * l'heure sautée/répétée du changement d'heure, à 2h du matin — hors de
- * la plage des séances (9h30–17h).
+ * la plage des séances (9h30–17h30).
  */
 export function brusselsToUTC(isoDate, time) {
   const [hh, mm] = time.split(":").map(Number);
