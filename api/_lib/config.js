@@ -45,13 +45,13 @@ export const TYPES = {
   classique: {
     id: "classique",
     label: "Classique",
-    price: 65,
+    price: 60,
     desc: "Réflexologie plantaire — 1h",
   },
   personnalisee: {
     id: "personnalisee",
     label: "Personnalisée",
-    price: 85,
+    price: 80,
     desc: "Moxa & Psio — 10h30 ou 16h",
   },
 };
