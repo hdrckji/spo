@@ -174,7 +174,9 @@ p + p { margin-top: 1rem; }
   text-decoration: none;
 }
 .nav__logo em { font-style: italic; color: var(--terra); }
-.nav__leaf { width: 1.35rem; height: 1.35rem; color: var(--forest); }
+/* Le logo arbre-yoga est plus haut que large : la hauteur commande, la
+   largeur suit le viewBox. 1.8rem le laisse lisible sans épaissir la barre. */
+.nav__leaf { width: auto; height: 1.8rem; color: var(--forest); }
 
 .nav__links {
   display: flex;
