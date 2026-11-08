@@ -312,8 +312,10 @@ p + p { margin-top: 1rem; }
   box-shadow: 0 14px 34px -16px rgba(43, 51, 39, 0.35);
   animation: chipfloat 6s ease-in-out infinite;
 }
-.hero__chip--1 { top: 17%; right: -4%; }
-.hero__chip--2 { bottom: 12%; left: -6%; animation-delay: -3s; }
+/* Décalées pour chevaucher la silhouette sans masquer ses traits marquants :
+   la couronne de feuillage en haut, les racines en bas. */
+.hero__chip--1 { top: 12%; right: -4%; }
+.hero__chip--2 { bottom: 3%; left: -6%; animation-delay: -3s; }
 
 .hero__chip-dot {
   width: 8px; height: 8px;
