@@ -351,7 +351,7 @@
     const b = payload.booking;
     successRecap.textContent =
       `${b.name}, votre séance ${b.type.toLowerCase()} du ${b.dateLabel} (${b.slot}) est confirmée. ` +
-      `Le paiement de ${b.price} € se fait sur place.`;
+      `Le paiement de ${b.price} € se fait sur place, par QR code ou en liquide.`;
 
     // Si l'e-mail n'est pas parti, on le dit. La réservation, elle, est bien
     // enregistrée : c'est la base qui fait foi, pas la messagerie.
