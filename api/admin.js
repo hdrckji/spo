@@ -243,7 +243,7 @@ async function testSMS(body, res) {
   // Le texte réel d'un rappel, pour le prochain vendredi : ce qui est testé
   // est bien ce qui partira, longueur et accents compris.
   const [nextFriday] = nextFridays(1);
-  const sample = reminderSMS({ booking_date: nextFriday, slot_label: "10h30 – 11h30" });
+  const sample = reminderSMS({ booking_date: nextFriday, slot_label: "11h00 – 12h30" });
 
   const result = await sendSMS(phone, sample);
 

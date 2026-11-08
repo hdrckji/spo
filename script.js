@@ -208,7 +208,7 @@
       } else if (!bookable) {
         const info = day.slots.find((s) => s.id === slot.id);
         if (state.type === "personnalisee" && !slot.perso) {
-          btn.title = "La séance personnalisée n'est proposée qu'à 10h30 et 16h00";
+          btn.title = "La séance personnalisée n'est proposée qu'à 11h00 et 16h00";
         } else if (info?.reason === "taken") {
           btn.title = "Déjà réservé";
         } else if (info?.reason === "too-soon") {
