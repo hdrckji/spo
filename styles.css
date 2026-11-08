@@ -631,6 +631,63 @@ p + p { margin-top: 1rem; }
 .price-card .btn { align-self: flex-start; }
 .price-card--featured .btn--primary { box-shadow: none; }
 
+/* ---------- Chèque cadeau ----------
+   Une invitation, pas une boutique : l'achat se fait au cabinet et le site
+   n'encaisse rien — d'où l'absence de tout bouton d'achat. */
+.gift {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  max-width: 900px;
+  margin: clamp(1.5rem, 3vw, 2.5rem) auto 0;
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: clamp(1.75rem, 4vw, 2.5rem) clamp(1.5rem, 4vw, 2.75rem);
+  box-shadow: var(--shadow-soft);
+}
+.gift .eyebrow { margin-bottom: 0.4rem; }
+.gift__text { flex: 1 1 22rem; }
+.gift__text h3 {
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  margin-bottom: 0.7rem;
+}
+.gift__text h3 em { font-style: italic; color: var(--terra); }
+.gift__text p:not(.eyebrow) {
+  font-size: 0.97rem;
+  color: rgba(43, 51, 39, 0.75);
+  max-width: 30rem;
+}
+.gift__text a { color: var(--terra); }
+
+/* L'aperçu du chèque, incliné comme posé là. La silhouette est réutilisée
+   depuis le logo de l'en-tête (#logo-arbre). */
+.gift__card {
+  flex: 0 0 auto;
+  width: min(210px, 70vw);
+  aspect-ratio: 8 / 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-inline: auto;
+  background: var(--forest-deep);
+  color: var(--cream);
+  border-radius: 14px;
+  transform: rotate(-4deg);
+  box-shadow: 0 20px 44px -20px rgba(46, 64, 52, 0.6);
+}
+.gift__card svg { height: 58px; width: auto; }
+.gift__card span {
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--sage-soft);
+}
+
 /* ---------- 04 · Réservation ---------- */
 .section--booking {
   max-width: none;
